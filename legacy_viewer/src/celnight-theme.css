@@ -1,0 +1,153 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Spacing scale */
+  --celnight-space-xs: 4px;
+  --celnight-space-sm: 8px;
+  --celnight-space-md: 12px;
+  --celnight-space-lg: 16px;
+  --celnight-space-xl: 24px;
+  --celnight-space-2xl: 32px;
+  --celnight-space-3xl: 48px;
+
+  /* Typography */
+  --celnight-font-sans: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  --celnight-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --celnight-font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --celnight-text-xs: 11px;
+  --celnight-text-sm: 12px;
+  --celnight-text-md: 14px;
+  --celnight-text-lg: 16px;
+  --celnight-text-xl: 20px;
+  --celnight-text-2xl: 24px;
+
+  /* Radii & shadows */
+  --celnight-radius-lg: 0px;
+  --celnight-radius-md: 0px;
+  --celnight-radius-pill: 0px;
+  --celnight-shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --celnight-shadow-light: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Transitions */
+  --celnight-transition-fast: 120ms ease-out;
+  --celnight-transition-med: 200ms ease;
+
+  /* Status colors (same for both themes) */
+  --celnight-status-pending: #fbbf24;
+  --celnight-status-processed: #22c55e;
+  --celnight-status-error: #f97373;
+}
+
+/* Dark Theme (CelNight) */
+:root[data-theme='dark'],
+:root:not([data-theme]) {
+  /* Core surfaces */
+  --celnight-bg: #030304;
+  --celnight-bg-void: #010101;
+  --celnight-bg-elevated: #0a0b11;
+  --celnight-surface: #10111a;
+  --celnight-surface-soft: #151723;
+  --celnight-surface-glow: #070708;
+
+  /* Borders & outlines */
+  --celnight-border-subtle: rgba(255, 255, 255, 0.08);
+  --celnight-border-strong: rgba(255, 255, 255, 0.18);
+  --celnight-grid-line: rgba(255, 255, 255, 0.06);
+  --celnight-hero-border: rgba(255, 255, 255, 0.25);
+
+  /* Text */
+  --celnight-text-primary: #f4f6fb;
+  --celnight-text-secondary: #a9acb9;
+  --celnight-text-muted: #6e7180;
+  --celnight-text-tertiary: rgba(244, 246, 251, 0.6);
+  --celnight-text-inverse: #04050a;
+  --celnight-ink: rgba(255, 255, 255, 0.85);
+
+  /* Accents */
+  --celnight-accent: #050505;
+  --celnight-accent-soft: rgba(255, 255, 255, 0.18);
+  --celnight-accent-alt: #ffffff;
+  --celnight-highlight-electric: #ffffff;
+  --celnight-highlight-rose: rgba(255, 255, 255, 0.65);
+  --celnight-tag-bg: rgba(255, 255, 255, 0.08);
+}
+
+/* Light Theme (CelDay) */
+:root[data-theme='light'] {
+  /* Core surfaces */
+  --celnight-bg: #ffffff;
+  --celnight-bg-void: #ffffff;
+  --celnight-bg-elevated: #ffffff;
+  --celnight-surface: #ffffff;
+  --celnight-surface-soft: #ffffff;
+  --celnight-surface-glow: #ffffff;
+
+  /* Borders & outlines */
+  --celnight-border-subtle: rgba(0, 0, 0, 0.08);
+  --celnight-border-strong: rgba(0, 0, 0, 0.18);
+  --celnight-grid-line: rgba(0, 0, 0, 0.06);
+  --celnight-hero-border: rgba(0, 0, 0, 0.25);
+
+  /* Text */
+  --celnight-text-primary: #000000;
+  --celnight-text-secondary: #111827;
+  --celnight-text-muted: #4b5563;
+  --celnight-text-tertiary: rgba(0, 0, 0, 0.7);
+  --celnight-text-inverse: #fbfbfc;
+  --celnight-ink: rgba(0, 0, 0, 0.85);
+
+  /* Accents */
+  --celnight-accent: #fafafa;
+  --celnight-accent-soft: rgba(0, 0, 0, 0.18);
+  --celnight-accent-alt: #000000;
+  --celnight-highlight-electric: #000000;
+  --celnight-highlight-rose: rgba(0, 0, 0, 0.65);
+  --celnight-tag-bg: rgba(0, 0, 0, 0.08);
+}
+
+body {
+  background: var(--celnight-bg);
+  color: var(--celnight-text-primary);
+  font-family: var(--celnight-font-sans);
+  transition: background-color var(--celnight-transition-med), color var(--celnight-transition-med);
+}
+
+.p-card {
+  background: var(--celnight-surface);
+  border-radius: var(--celnight-radius-lg);
+  border: 1px solid var(--celnight-border-subtle);
+  box-shadow: var(--celnight-shadow-soft);
+}
+
+.p-button {
+  border-radius: var(--celnight-radius-pill);
+  font-size: var(--celnight-text-sm);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.p-button.p-button-text {
+  background: transparent;
+  border: none;
+}
+
+.p-button.celnight-accent {
+  background: var(--celnight-accent);
+  border-color: var(--celnight-accent);
+  color: var(--celnight-text-inverse);
+}
+
+.p-button.celnight-accent:hover {
+  box-shadow: 0 0 0 1px var(--celnight-accent-soft), 0 0 20px var(--celnight-accent-soft);
+}
+
+.p-badge.celnight-pill {
+  background: var(--celnight-accent-soft);
+  color: var(--celnight-accent);
+  border-radius: var(--celnight-radius-pill);
+  padding: 0 10px;
+  font-size: var(--celnight-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+

@@ -1,0 +1,10 @@
+.git
+.pytest_cache
+.venv
+__pycache__
+web/node_modules
+web/dist
+test_dataset
+data/minio
+data/artifacts
+data/catalog/catalog.json

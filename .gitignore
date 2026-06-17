@@ -1,0 +1,37 @@
+.DS_Store
+
+# Python
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyc
+
+# Node / frontend
+node_modules/
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# Local artifacts
+.artifacts/
+data/artifacts/*
+!data/artifacts/.gitkeep
+
+# Local runtime data
+data/minio/
+!data/minio/.gitkeep
+
+# Generated catalogs
+data/catalog/catalog.json
+data/catalog/benchmark-catalog.json
+
+# Local datasets
+test_dataset/
+
+# Environment overrides
+.env
+.env.*
+!.env.example

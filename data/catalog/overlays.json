@@ -1,0 +1,66 @@
+{
+  "slides": {
+    "slide-1": {
+      "overlays": [
+        {
+          "id": "overlay-1",
+          "name": "Tumor Regions",
+          "kind": "vector",
+          "legend": [
+            {
+              "label": "tumor",
+              "color": "#38bdf8"
+            }
+          ],
+          "features": [
+            {
+              "id": "feature-1",
+              "name": "Region 1",
+              "kind": "polygon",
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      0,
+                      0
+                    ],
+                    [
+                      10,
+                      0
+                    ],
+                    [
+                      10,
+                      10
+                    ],
+                    [
+                      0,
+                      0
+                    ]
+                  ]
+                ]
+              },
+              "properties": {
+                "class": "tumor"
+              },
+              "styleHints": {
+                "color": [
+                  56,
+                  189,
+                  248,
+                  255
+                ]
+              },
+              "bounds": [
+                0,
+                0,
+                10,
+                10
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

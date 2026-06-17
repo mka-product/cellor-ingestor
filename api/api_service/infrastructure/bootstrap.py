@@ -1,0 +1,77 @@
+"""Purpose: compose API dependencies for local runtime and tests.
+Owner context: Identity & Catalog and Delivery.
+Invariants: a single container owns repository state for one app instance.
+Failure modes: incorrect wiring causes startup failure.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from minio import Minio
+
+from api.api_service.application.services import (
+    CatalogQueryService,
+    OverlayQueryService,
+    ReviewApplicationService,
+    UploadApplicationService,
+)
+from api.api_service.infrastructure.catalog import FileCatalog
+from api.api_service.infrastructure.events import InMemoryEventPublisher
+from api.api_service.infrastructure.minio_proxy import MinioProxy
+from api.api_service.infrastructure.queue import InMemoryJobQueue
+from api.api_service.infrastructure.repositories import (
+    InMemoryIngestionJobRepository,
+    InMemorySlideRepository,
+    InMemorySlideVersionRepository,
+)
+from api.api_service.infrastructure.settings import Settings
+from api.api_service.infrastructure.workspace_store import (
+    FileAnnotationLayerRepository,
+    FileAnnotationRepository,
+    FileCommentRepository,
+    FileOverlayRepository,
+    FileReviewRepository,
+)
+
+
+@dataclass
+class Container:
+    settings: Settings = field(default_factory=Settings.from_env)
+    slides: InMemorySlideRepository = field(default_factory=InMemorySlideRepository)
+    versions: InMemorySlideVersionRepository = field(default_factory=InMemorySlideVersionRepository)
+    jobs: InMemoryIngestionJobRepository = field(default_factory=InMemoryIngestionJobRepository)
+    events: InMemoryEventPublisher = field(default_factory=InMemoryEventPublisher)
+    queue: InMemoryJobQueue = field(default_factory=InMemoryJobQueue)
+
+    def __post_init__(self) -> None:
+        self.catalog = FileCatalog(self.settings.catalog_path)
+        self.overlays = FileOverlayRepository(self.settings.overlays_path)
+        self.review_store = FileReviewRepository(self.settings.reviews_path)
+        self.annotation_layers = FileAnnotationLayerRepository(self.review_store)
+        self.annotations = FileAnnotationRepository(self.review_store)
+        self.comments = FileCommentRepository(self.review_store)
+        self.minio_proxy = MinioProxy(
+            Minio(
+                self.settings.minio_endpoint,
+                access_key=self.settings.minio_access_key,
+                secret_key=self.settings.minio_secret_key,
+                secure=self.settings.minio_secure,
+            )
+        )
+
+    @property
+    def upload_service(self) -> UploadApplicationService:
+        return UploadApplicationService(self.slides, self.versions, self.jobs, self.events, self.queue, self.catalog)
+
+    @property
+    def catalog_service(self) -> CatalogQueryService:
+        return CatalogQueryService(self.slides, self.versions)
+
+    @property
+    def overlay_service(self) -> OverlayQueryService:
+        return OverlayQueryService(self.overlays)
+
+    @property
+    def review_service(self) -> ReviewApplicationService:
+        return ReviewApplicationService(self.annotation_layers, self.annotations, self.comments)

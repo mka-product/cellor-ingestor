@@ -1,0 +1,122 @@
+{
+  "slides": {
+    "cmu-1-ndpi": {
+      "layers": [
+        {
+          "id": "layer-b31824701baa",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        }
+      ],
+      "annotations": [
+        {
+          "id": "0cbf9dd9-cf89-4bd2-9733-0946f28e1714",
+          "layerId": "layer-b31824701baa",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  38395.44599745871,
+                  17090.00283003411
+                ],
+                [
+                  37643.44119809258,
+                  15338.092802906616
+                ],
+                [
+                  34711.908513341805,
+                  8508.639706868045
+                ],
+                [
+                  22934.282083862767,
+                  16023.392724329853
+                ],
+                [
+                  38395.44599745871,
+                  17090.00283003411
+                ]
+              ]
+            ]
+          },
+          "properties": {
+            "style": {},
+            "layerId": "layer-b31824701baa"
+          },
+          "style": {},
+          "createdAt": "2026-06-17T08:51:12.056844Z",
+          "updatedAt": "2026-06-17T09:38:44.299449Z"
+        },
+        {
+          "id": "cf829001-4088-4c2e-9e24-8d70bd405995",
+          "layerId": "layer-b31824701baa",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  38395.44599745871,
+                  17090.00283003411
+                ],
+                [
+                  34711.908513341805,
+                  8508.639706868045
+                ],
+                [
+                  22934.282083862767,
+                  16023.392724329853
+                ],
+                [
+                  38395.44599745871,
+                  17090.00283003411
+                ]
+              ]
+            ]
+          },
+          "properties": {},
+          "style": {},
+          "createdAt": "2026-06-17T08:51:13.736278Z",
+          "updatedAt": "2026-06-17T08:51:13.745532Z"
+        }
+      ],
+      "comments": [
+        {
+          "id": "comment-a0945236b185",
+          "annotationId": "0cbf9dd9-cf89-4bd2-9733-0946f28e1714",
+          "body": "test",
+          "author": "local-user",
+          "createdAt": "2026-06-17T08:51:28.137609Z"
+        },
+        {
+          "id": "comment-7b562852c07f",
+          "annotationId": "0cbf9dd9-cf89-4bd2-9733-0946f28e1714",
+          "body": "test",
+          "author": "local-user",
+          "createdAt": "2026-06-17T08:51:32.357402Z"
+        }
+      ]
+    },
+    "cmu-1-svs": {
+      "layers": [
+        {
+          "id": "layer-e1df5787cc13",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        }
+      ],
+      "annotations": [],
+      "comments": []
+    }
+  }
+}lse
+        }
+      ],
+      "annotations": [],
+      "comments": []
+    }
+  }
+}

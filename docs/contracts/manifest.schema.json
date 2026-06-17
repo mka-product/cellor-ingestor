@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cellor.local/contracts/manifest.schema.json",
+  "title": "ViewerManifest",
+  "type": "object",
+  "required": [
+    "schema",
+    "slideId",
+    "versionId",
+    "width",
+    "height",
+    "tileSize",
+    "groupSize",
+    "levels",
+    "artifacts",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "wsi-tile-manifest-v1"
+    },
+    "slideId": { "type": "string", "minLength": 1 },
+    "versionId": { "type": "string", "minLength": 1 },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "tileSize": { "type": "integer", "enum": [256, 512] },
+    "groupSize": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "levels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["level", "downsample", "width", "height", "tilesX", "tilesY", "indexPath"],
+        "properties": {
+          "level": { "type": "integer", "minimum": 0 },
+          "downsample": { "type": "integer", "minimum": 1 },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "tilesX": { "type": "integer", "minimum": 1 },
+          "tilesY": { "type": "integer", "minimum": 1 },
+          "indexPath": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["manifestPath", "thumbnailPath"],
+      "properties": {
+        "manifestPath": { "type": "string", "minLength": 1 },
+        "thumbnailPath": { "type": "string", "minLength": 1 },
+        "tissueMaskPath": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "vendor": { "type": "string" },
+        "objectivePower": { "type": "number" },
+        "micronsPerPixel": {
+          "type": "object",
+          "required": ["source"],
+          "properties": {
+            "x": { "type": ["number", "null"] },
+            "y": { "type": ["number", "null"] },
+            "source": { "type": "string", "enum": ["openslide", "ome", "vendor"] }
+          },
+          "additionalProperties": false
+        },
+        "sourceProperties": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["ingestionVersion", "sourceChecksum", "publishedAt"],
+      "properties": {
+        "ingestionVersion": { "type": "string", "minLength": 1 },
+        "sourceChecksum": { "type": "string", "minLength": 1 },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "sourceName": { "type": "string" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "levelCount": { "type": "integer", "minimum": 0 },
+            "tileCount": { "type": "integer", "minimum": 0 },
+            "nonEmptyTileCount": { "type": "integer", "minimum": 0 },
+            "groupCount": { "type": "integer", "minimum": 0 },
+            "artifactBytes": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
