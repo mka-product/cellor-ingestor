@@ -37,7 +37,7 @@ export function ScaleBar({ label, pixels, position, onPositionChange }: Props) {
         cursor: "grab"
       }}
     >
-      <div style={{ marginBottom: 6, fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ marginBottom: 6, fontSize: 12, letterSpacing: "0.14em" }}>{label}</div>
       <div style={{ width: pixels, borderTop: "3px solid white" }} />
     </div>
   );

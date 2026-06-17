@@ -37,7 +37,7 @@ export function MetadataPanel({ manifest, position, zIndex, onPositionChange, on
         <div className="workspace-metric">
           <dt>MPP</dt>
           <dd>
-            {metadata?.micronsPerPixel?.x ?? "?"} × {metadata?.micronsPerPixel?.y ?? "?"} µm
+            {metadata?.micronsPerPixel?.x ?? "?"} × {metadata?.micronsPerPixel?.y ?? "?"} μm
           </dd>
         </div>
         <div className="workspace-metric">

@@ -211,7 +211,7 @@ function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel
   if (microns >= 1000) {
     return `Distance: ${(microns / 1000).toFixed(2)} mm`;
   }
-  return `Distance: ${microns.toFixed(0)} µm`;
+  return `Distance: ${microns.toFixed(0)} μm`;
 }
 
 export function ViewerCanvas(props: Props) {
@@ -549,7 +549,7 @@ export function ViewerCanvas(props: Props) {
     if (microns >= 1000) {
       return { label: `${(microns / 1000).toFixed(2)} mm`, pixels };
     }
-    return { label: `${microns.toFixed(0)} µm`, pixels };
+    return { label: `${microns.toFixed(0)} μm`, pixels };
   }, [manifest.metadata?.micronsPerPixel?.x, manifest.metadata?.micronsPerPixel?.y, scale]);
 
   if (status === "error") {
