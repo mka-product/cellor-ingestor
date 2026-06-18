@@ -8,17 +8,18 @@ export type ViewerSize = {
 export type ViewState = {
   target: [number, number, number];
   zoom: number;
+  rotationOrbit: number;
 };
 
 export const DEFAULT_VIEWER_SIZE: ViewerSize = { width: 1280, height: 800 };
 export const MINIMAP_WIDTH = 200;
 
 export function topDownToWorldY(manifestHeight: number, value: number): number {
-  return manifestHeight - value;
+  return value;
 }
 
 export function worldToTopDownY(manifestHeight: number, value: number): number {
-  return manifestHeight - value;
+  return value;
 }
 
 export function fitZoom(manifest: ViewerManifest, size: ViewerSize): number {
@@ -29,7 +30,8 @@ export function fitZoom(manifest: ViewerManifest, size: ViewerSize): number {
 export function createInitialViewState(manifest: ViewerManifest, size: ViewerSize): ViewState {
   return {
     target: [manifest.width / 2, manifest.height / 2, 0],
-    zoom: fitZoom(manifest, size)
+    zoom: fitZoom(manifest, size),
+    rotationOrbit: 0
   };
 }
 

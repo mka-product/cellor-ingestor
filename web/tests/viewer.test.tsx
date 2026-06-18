@@ -64,11 +64,11 @@ test("tile bounds map top-down slide tiles into deck world coordinates", () => {
     artifacts: { manifestPath: "/manifest", thumbnailPath: "/thumb" },
     provenance: { ingestionVersion: "0.1.0", sourceChecksum: "sha", publishedAt: "2026-06-16T00:00:00Z" }
   };
-  expect(tileBounds(manifest, manifest.levels[0], 0, 0)).toEqual([0, 146, 32768, 32914]);
-  expect(tileBounds(manifest, manifest.levels[0], 1, 1)).toEqual([32768, 0, 46000, 146]);
+  expect(tileBounds(manifest, manifest.levels[0], 0, 0)).toEqual([0, 32768, 32768, 0]);
+  expect(tileBounds(manifest, manifest.levels[0], 1, 1)).toEqual([32768, 32914, 46000, 32768]);
 });
 
-test("visible slide window converts deck world coordinates back into top-down slide coordinates", () => {
+test("visible slide window preserves top-down coordinates in direct world mapping mode", () => {
   const manifest = {
     schema: "wsi-tile-manifest-v1" as const,
     slideId: "slide-1",
@@ -84,8 +84,8 @@ test("visible slide window converts deck world coordinates back into top-down sl
   expect(visibleSlideWindow(manifest, { target: [500, 400, 0], zoom: 0 }, { width: 500, height: 400 }, 1)).toEqual({
     left: 250,
     right: 750,
-    top: 200,
-    bottom: 600
+    top: 600,
+    bottom: 200
   });
 });
 

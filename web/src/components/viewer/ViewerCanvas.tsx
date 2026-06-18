@@ -2,23 +2,34 @@ import { OrthographicView } from "@deck.gl/core";
 import {
   EditableGeoJsonLayer,
   DrawLineStringMode,
-  DrawPointMode,
   DrawPolygonMode,
-  DrawRectangleMode,
   ModifyMode,
   ViewMode
 } from "@deck.gl-community/editable-layers";
 import { BitmapLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import DeckGL from "@deck.gl/react";
+import { Matrix4 } from "@math.gl/core";
+import { RotateCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ViewerManifest } from "../../domain/contracts";
 import type { AnnotationFeature, AnnotationLayer, OverlayFeature } from "../../domain/workspace";
 import { TileIndexLookup, decodeTileIndex } from "../../infrastructure/indexCodec";
 import { buildTileGroupUrl, fetchTileGroup, fetchTileIndex } from "../../infrastructure/manifestClient";
+import { applyAnnotationBooleanOperation, type AnnotationBooleanMode } from "../../viewer/annotationBoolean";
 import { selectLevel } from "../../viewer/lod";
 import { TileCache } from "../../viewer/tileCache";
-import { DEFAULT_VIEWER_SIZE, MINIMAP_WIDTH, createInitialViewState, tileBounds, topDownToWorldY, type ViewerSize, type ViewState, visibleSlideWindow, worldToTopDownY } from "./viewerMath";
+import {
+  DEFAULT_VIEWER_SIZE,
+  MINIMAP_WIDTH,
+  createInitialViewState,
+  tileBounds,
+  topDownToWorldY,
+  type ViewerSize,
+  type ViewState,
+  visibleSlideWindow,
+  worldToTopDownY
+} from "./viewerMath";
 import { MiniMap } from "./MiniMap";
 import { ScaleBar } from "./ScaleBar";
 
@@ -28,6 +39,7 @@ type Props = {
   annotationLayers: AnnotationLayer[];
   annotations: AnnotationFeature[];
   tool: string;
+  annotationOperation: AnnotationBooleanMode;
   activeLayerId: string | null;
   selectedOverlayId: string | null;
   selectedAnnotationId: string | null;
@@ -59,6 +71,26 @@ type RenderableImage = HTMLImageElement;
 const OVERSCAN_TILES = 1;
 const TILE_CACHE_CAPACITY = 320;
 const VIEW = new OrthographicView({ id: "wsi-view" });
+
+function cursorForTool(tool: string, isDragging: boolean): string {
+  if (tool === "view") {
+    return isDragging ? "grabbing" : "grab";
+  }
+  if (tool === "modify") {
+    return "default";
+  }
+  if (tool === "line") {
+    return "cell";
+  }
+  if (tool === "polygon") {
+    return "crosshair";
+  }
+  return "default";
+}
+
+function isDrawTool(tool: string): boolean {
+  return tool === "line" || tool === "polygon";
+}
 
 function clampTileRange(minimum: number, maximum: number, limit: number): [number, number] {
   const clampedMinimum = Math.max(0, Math.min(minimum, limit - 1));
@@ -136,18 +168,6 @@ async function decodeTileImage(payload: Uint8Array): Promise<HTMLImageElement> {
   });
 }
 
-function hasWebglContext(): boolean {
-  if (typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom")) {
-    return false;
-  }
-  try {
-    const canvas = document.createElement("canvas");
-    return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
-  } catch {
-    return false;
-  }
-}
-
 function imagePointToWorld(manifest: ViewerManifest, point: [number, number]): [number, number] {
   return [point[0], topDownToWorldY(manifest.height, point[1])];
 }
@@ -188,13 +208,24 @@ function annotationColor(layer: AnnotationLayer | undefined): [number, number, n
   return [parsed >> 16, (parsed >> 8) & 255, parsed & 255, 180];
 }
 
-function colorFromHex(value: unknown, fallback: [number, number, number, number]): [number, number, number, number] {
+function alphaFromOpacity(opacity: unknown, fallback: number): number {
+  const normalized = Number(opacity);
+  if (!Number.isFinite(normalized)) return fallback;
+  return Math.max(0, Math.min(255, Math.round(normalized * 255)));
+}
+
+function colorFromHex(
+  value: unknown,
+  fallback: [number, number, number, number],
+  opacity?: unknown
+): [number, number, number, number] {
+  const alpha = alphaFromOpacity(opacity, fallback[3]);
   if (typeof value !== "string" || !value.startsWith("#")) return fallback;
   const normalized = value.replace("#", "");
   const full = normalized.length === 3 ? normalized.split("").map((part) => part + part).join("") : normalized;
   const parsed = Number.parseInt(full, 16);
   if (Number.isNaN(parsed)) return fallback;
-  return [parsed >> 16, (parsed >> 8) & 255, parsed & 255, fallback[3]];
+  return [parsed >> 16, (parsed >> 8) & 255, parsed & 255, alpha];
 }
 
 function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel: number | null): string {
@@ -214,6 +245,81 @@ function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel
   return `Distance: ${microns.toFixed(0)} μm`;
 }
 
+function distanceBetweenPoints(a: number[], b: number[]): number {
+  const dx = (b[0] ?? 0) - (a[0] ?? 0);
+  const dy = (b[1] ?? 0) - (a[1] ?? 0);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function isFinitePosition(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1]);
+}
+
+function positionsEqual(a: number[], b: number[]) {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+function sanitizeLineCoordinates(coordinates: unknown): number[][] | null {
+  if (!Array.isArray(coordinates)) return null;
+  const points = coordinates.filter(isFinitePosition).map((point) => [Number(point[0]), Number(point[1])]);
+  return points.length >= 2 ? points : null;
+}
+
+function sanitizePolygonRing(ring: unknown): number[][] | null {
+  if (!Array.isArray(ring)) return null;
+  const points = ring.filter(isFinitePosition).map((point) => [Number(point[0]), Number(point[1])]);
+  if (points.length < 3) return null;
+  const uniquePoints = points.filter(
+    (point, index) => index === 0 || !positionsEqual(point, points[index - 1] as number[])
+  );
+  if (uniquePoints.length < 3) return null;
+  const closedRing = positionsEqual(uniquePoints[0] as number[], uniquePoints[uniquePoints.length - 1] as number[])
+    ? uniquePoints
+    : [...uniquePoints, uniquePoints[0] as number[]];
+  return closedRing.length >= 4 ? closedRing : null;
+}
+
+function sanitizePolygonCoordinates(coordinates: unknown): number[][][] | null {
+  if (!Array.isArray(coordinates) || coordinates.length === 0) return null;
+  const rings = coordinates
+    .map((ring) => sanitizePolygonRing(ring))
+    .filter((ring): ring is number[][] => ring !== null);
+  return rings.length > 0 ? rings : null;
+}
+
+function sanitizeAnnotationGeometry(geometry: Record<string, unknown>): Record<string, unknown> | null {
+  const type = String(geometry.type ?? "");
+  if (type === "Polygon") {
+    const coordinates = sanitizePolygonCoordinates(geometry.coordinates);
+    return coordinates ? { type, coordinates } : null;
+  }
+  if (type === "LineString") {
+    const coordinates = sanitizeLineCoordinates(geometry.coordinates);
+    return coordinates ? { type, coordinates } : null;
+  }
+  if (type === "Point") {
+    const coordinates = isFinitePosition(geometry.coordinates)
+      ? [Number((geometry.coordinates as number[])[0]), Number((geometry.coordinates as number[])[1])]
+      : null;
+    return coordinates ? { type, coordinates } : null;
+  }
+  return null;
+}
+
+function sanitizeAnnotationFeature(feature: AnnotationFeature): AnnotationFeature | null {
+  const geometry = sanitizeAnnotationGeometry(feature.geometry);
+  return geometry ? { ...feature, geometry } : null;
+}
+
+class PixelAccurateDrawLineStringMode extends DrawLineStringMode {
+  calculateInfoDraw(clickSequence: number[][]) {
+    if (clickSequence.length > 1) {
+      this.position = clickSequence[clickSequence.length - 1] as any;
+      this.dist += distanceBetweenPoints(clickSequence[clickSequence.length - 2], clickSequence[clickSequence.length - 1]);
+    }
+  }
+}
+
 export function ViewerCanvas(props: Props) {
   const { manifest } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -222,40 +328,70 @@ export function ViewerCanvas(props: Props) {
   const groupCacheRef = useRef(new Map<string, Promise<ArrayBuffer>>());
   const pendingTileRef = useRef(new Map<string, Promise<void>>());
   const scaleBarDraggedRef = useRef(false);
+  const rotationDragRef = useRef<{ pointerId: number; startX: number; startRotation: number } | null>(null);
+  const annotationCollectionRef = useRef<any>({ type: "FeatureCollection", features: [] });
+  const pendingAnnotationCollectionRef = useRef<any | null>(null);
+  const annotationFrameRef = useRef<number | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>(DEFAULT_VIEWER_SIZE);
   const [viewState, setViewState] = useState<ViewState>(createInitialViewState(manifest, DEFAULT_VIEWER_SIZE));
   const [status, setStatus] = useState("loading");
-  const [webglAvailable, setWebglAvailable] = useState(false);
   const [indexRevision, setIndexRevision] = useState(0);
   const [tileRevision, setTileRevision] = useState(0);
   const [annotationCollection, setAnnotationCollection] = useState<any>({ type: "FeatureCollection", features: [] });
   const [scaleBarPosition, setScaleBarPosition] = useState({ x: 16, y: DEFAULT_VIEWER_SIZE.height - 64 });
+  const [rotationTooltip, setRotationTooltip] = useState<string | null>(null);
   const resetViewer = () => setViewState(createInitialViewState(manifest, viewerSize));
   const zoomInViewer = () => setViewState((current) => ({ ...current, zoom: Math.min(current.zoom + 0.5, 10) }));
   const zoomOutViewer = () => setViewState((current) => ({ ...current, zoom: Math.max(current.zoom - 0.5, -10) }));
 
-  useEffect(() => {
-    setWebglAvailable(hasWebglContext());
-  }, []);
+  const commitAnnotationCollection = (nextCollection: any) => {
+    annotationCollectionRef.current = nextCollection;
+    setAnnotationCollection(nextCollection);
+  };
+
+  const scheduleAnnotationCollectionUpdate = (nextCollection: any) => {
+    pendingAnnotationCollectionRef.current = nextCollection;
+    if (annotationFrameRef.current != null) return;
+    annotationFrameRef.current = window.requestAnimationFrame(() => {
+      annotationFrameRef.current = null;
+      const pending = pendingAnnotationCollectionRef.current;
+      pendingAnnotationCollectionRef.current = null;
+      if (pending) {
+        commitAnnotationCollection(pending);
+      }
+    });
+  };
 
   useEffect(() => {
-    setAnnotationCollection({
+    const nextCollection = {
       type: "FeatureCollection",
-      features: props.annotations.map((annotation) => ({
-        type: "Feature",
-        id: annotation.id,
-        geometry: {
-          type: String(annotation.geometry["type"] ?? "Polygon"),
-          coordinates: imageCoordinatesToWorld(manifest, annotation.geometry["coordinates"])
-        },
-        properties: {
-          ...annotation.properties,
-          style: annotation.style,
-          layerId: annotation.layerId
-        }
-      }))
-    });
+      features: props.annotations
+        .map((annotation) => sanitizeAnnotationFeature(annotation))
+        .filter((annotation): annotation is AnnotationFeature => annotation !== null)
+        .map((annotation) => ({
+          type: "Feature",
+          id: annotation.id,
+          geometry: {
+            type: String(annotation.geometry["type"] ?? "Polygon"),
+            coordinates: imageCoordinatesToWorld(manifest, annotation.geometry["coordinates"])
+          },
+          properties: {
+            ...annotation.properties,
+            style: annotation.style,
+            layerId: annotation.layerId
+          }
+        }))
+    };
+    commitAnnotationCollection(nextCollection);
   }, [manifest, props.annotations]);
+
+  useEffect(() => {
+    return () => {
+      if (annotationFrameRef.current != null) {
+        window.cancelAnimationFrame(annotationFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setViewState(createInitialViewState(manifest, viewerSize));
@@ -289,6 +425,7 @@ export function ViewerCanvas(props: Props) {
   }, [viewerSize.height]);
 
   const scale = useMemo(() => 2 ** viewState.zoom, [viewState.zoom]);
+  const drawToolActive = useMemo(() => isDrawTool(props.tool), [props.tool]);
   const viewportScale = useMemo(() => Math.max(1, 1 / scale), [scale]);
   const level = useMemo(() => selectLevel(manifest, viewportScale), [manifest, viewportScale]);
   const selectedLookup = useMemo(() => indexCacheRef.current.get(level.indexPath) ?? null, [indexRevision, level.indexPath]);
@@ -370,6 +507,15 @@ export function ViewerCanvas(props: Props) {
     return () => controller.abort();
   }, [allVisibleTiles]);
 
+  const layerModelMatrix = useMemo(
+    () =>
+      new Matrix4()
+        .translate([manifest.width / 2, manifest.height / 2, 0])
+        .rotateZ((viewState.rotationOrbit * Math.PI) / 180)
+        .translate([-manifest.width / 2, -manifest.height / 2, 0]),
+    [manifest.height, manifest.width, viewState.rotationOrbit]
+  );
+
   const bitmapLayers = useMemo(() => {
     return renderLevels
       .flatMap((renderLevel) =>
@@ -380,12 +526,13 @@ export function ViewerCanvas(props: Props) {
             id: `${renderLevel.isFallback ? "fallback" : "primary"}:${tile.key}`,
             image,
             bounds: tile.bounds,
-            opacity: renderLevel.isFallback ? 0.7 : 1
+            opacity: 1,
+            modelMatrix: layerModelMatrix
           });
         })
       )
       .filter(Boolean);
-  }, [renderLevels, tileRevision]) as BitmapLayer[];
+  }, [layerModelMatrix, renderLevels, tileRevision]) as BitmapLayer[];
 
   useEffect(() => {
     props.onViewportStatsChange?.({
@@ -393,7 +540,7 @@ export function ViewerCanvas(props: Props) {
       visibleTiles: bitmapLayers.length,
       totalVisibleReferences: allVisibleTiles.length
     });
-  }, [allVisibleTiles.length, bitmapLayers.length, level.level, props]);
+  }, [allVisibleTiles.length, bitmapLayers.length, level.level, props.onViewportStatsChange]);
 
   useEffect(() => {
     window.addEventListener("viewer-zoom-in", zoomInViewer as EventListener);
@@ -431,41 +578,63 @@ export function ViewerCanvas(props: Props) {
     [manifest, props.overlayFeatures]
   );
 
-  const overlayLayers = [
-    new PolygonLayer({
-      id: "overlay-polygons",
-      data: polygonOverlays,
-      getPolygon: (item: (typeof polygonOverlays)[number]) => item.polygon[0] ?? [],
-      getLineColor: (item: (typeof polygonOverlays)[number]) => overlayColor(item, [56, 189, 248, 255]),
-      getFillColor: (item: (typeof polygonOverlays)[number]) => overlayColor(item, [56, 189, 248, 70]),
-      lineWidthUnits: "pixels",
-      getLineWidth: (item: (typeof polygonOverlays)[number]) => overlayStrokeWidth(item),
-      pickable: true,
-      onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
-    }),
-    new PathLayer({
-      id: "overlay-lines",
-      data: lineOverlays,
-      getPath: (item: (typeof lineOverlays)[number]) => item.path as any,
-      getColor: (item: (typeof lineOverlays)[number]) => overlayColor(item, [244, 114, 182, 255]),
-      widthUnits: "pixels",
-      getWidth: (item: (typeof lineOverlays)[number]) => overlayStrokeWidth(item),
-      pickable: true,
-      onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
-    }),
-    new ScatterplotLayer({
-      id: "overlay-points",
-      data: pointOverlays,
-      getPosition: (item: (typeof pointOverlays)[number]) => item.position as [number, number],
-      getRadius: () => 16,
-      radiusUnits: "pixels",
-      getFillColor: (item: (typeof pointOverlays)[number]) => overlayColor(item, [251, 191, 36, 255]),
-      pickable: true,
-      onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
-    })
-  ];
+  const overlayLayers = useMemo(
+    () => [
+      new PolygonLayer({
+        id: "overlay-polygons",
+        data: polygonOverlays,
+        getPolygon: (item: (typeof polygonOverlays)[number]) => item.polygon[0] ?? [],
+        getLineColor: (item: (typeof polygonOverlays)[number]) => overlayColor(item, [56, 189, 248, 255]),
+        getFillColor: (item: (typeof polygonOverlays)[number]) => overlayColor(item, [56, 189, 248, 70]),
+        lineWidthUnits: "pixels",
+        getLineWidth: (item: (typeof polygonOverlays)[number]) => overlayStrokeWidth(item),
+        modelMatrix: layerModelMatrix,
+        pickable: true,
+        onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
+      }),
+      new PathLayer({
+        id: "overlay-lines",
+        data: lineOverlays,
+        getPath: (item: (typeof lineOverlays)[number]) => item.path as any,
+        getColor: (item: (typeof lineOverlays)[number]) => overlayColor(item, [244, 114, 182, 255]),
+        widthUnits: "pixels",
+        getWidth: (item: (typeof lineOverlays)[number]) => overlayStrokeWidth(item),
+        modelMatrix: layerModelMatrix,
+        pickable: true,
+        onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
+      }),
+      new ScatterplotLayer({
+        id: "overlay-points",
+        data: pointOverlays,
+        getPosition: (item: (typeof pointOverlays)[number]) => item.position as [number, number],
+        getRadius: () => 16,
+        radiusUnits: "pixels",
+        getFillColor: (item: (typeof pointOverlays)[number]) => overlayColor(item, [251, 191, 36, 255]),
+        modelMatrix: layerModelMatrix,
+        pickable: true,
+        onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
+      })
+    ],
+    [layerModelMatrix, lineOverlays, pointOverlays, polygonOverlays, props.onSelectOverlay]
+  );
 
-  const editableLayer = new EditableGeoJsonLayer({
+  const selectedFeatureIndexes = useMemo(
+    () =>
+      props.selectedAnnotationId == null
+        ? []
+        : (annotationCollection.features as Array<{ id?: string }>).reduce((indexes: number[], feature, index) => {
+            if (feature.id === props.selectedAnnotationId) indexes.push(index);
+            return indexes;
+          }, []),
+    [annotationCollection.features, props.selectedAnnotationId]
+  );
+
+  const annotationLayerById = useMemo(
+    () => new Map(props.annotationLayers.map((layer) => [layer.id, layer])),
+    [props.annotationLayers]
+  );
+
+  const editableLayer = useMemo(() => new EditableGeoJsonLayer({
     id: "annotations",
     data: annotationCollection,
     coordinateSystem: "cartesian",
@@ -476,40 +645,72 @@ export function ViewerCanvas(props: Props) {
     mode:
       props.tool === "modify"
         ? ModifyMode
-        : props.tool === "point"
-          ? DrawPointMode
-          : props.tool === "line"
-            ? DrawLineStringMode
-            : props.tool === "rectangle"
-              ? DrawRectangleMode
-              : props.tool === "polygon"
-                ? DrawPolygonMode
-                : ViewMode,
-    selectedFeatureIndexes:
-      props.selectedAnnotationId == null
-        ? []
-        : (annotationCollection.features as Array<{ id?: string }>).reduce((indexes: number[], feature, index) => {
-            if (feature.id === props.selectedAnnotationId) indexes.push(index);
-            return indexes;
-          }, []),
-    getFillColor: (feature: { properties?: { layerId?: string; style?: { color?: string } } }) =>
+        : props.tool === "line"
+            ? PixelAccurateDrawLineStringMode
+            : props.tool === "polygon"
+              ? DrawPolygonMode
+              : ViewMode,
+    selectedFeatureIndexes,
+    getFillColor: (feature: { properties?: { layerId?: string; style?: { color?: string; opacity?: number } } }) =>
       colorFromHex(
         feature.properties?.style?.color,
-        annotationColor(props.annotationLayers.find((layer) => layer.id === feature.properties?.layerId))
+        annotationColor(annotationLayerById.get(String(feature.properties?.layerId ?? ""))),
+        feature.properties?.style?.opacity
       ),
-    getLineColor: (feature: { properties?: { layerId?: string; style?: { color?: string } } }) =>
+    getLineColor: (feature: { properties?: { layerId?: string; style?: { color?: string; opacity?: number } } }) =>
       colorFromHex(
         feature.properties?.style?.color,
-        annotationColor(props.annotationLayers.find((layer) => layer.id === feature.properties?.layerId))
+        annotationColor(annotationLayerById.get(String(feature.properties?.layerId ?? ""))),
+        feature.properties?.style?.opacity
       ),
     getLineWidth: (feature: { properties?: { style?: { lineWidth?: number } } }) => Number(feature.properties?.style?.lineWidth ?? 2),
+    modelMatrix: layerModelMatrix,
     pickable: true,
     onClick: (info: { object?: { id?: string } }) => props.onSelectAnnotation((info.object?.id as string | null) ?? null),
-    onEdit: ({ updatedData }: { updatedData: any }) => {
-      setAnnotationCollection(updatedData);
+    onEdit: ({ updatedData, editType }: { updatedData: any; editType: string }) => {
+      const isCommittedAdd = editType === "addFeature";
+      const isTentative =
+        editType === "addTentativePosition" ||
+        editType === "updateTentativeFeature" ||
+        editType === "invalidPolygon" ||
+        editType === "invalidHole" ||
+        editType === "movePosition";
+
+      if (isTentative) {
+        scheduleAnnotationCollectionUpdate(updatedData);
+        return;
+      }
+
+      if (editType === "cancelFeature") {
+        commitAnnotationCollection(updatedData);
+        return;
+      }
+
+      const nextData =
+        isCommittedAdd
+          ? {
+              ...updatedData,
+              features: applyAnnotationBooleanOperation({
+                previousFeatures: annotationCollectionRef.current.features as any[],
+                updatedFeatures: updatedData.features as any[],
+                operation: props.annotationOperation,
+                activeLayerId: props.activeLayerId
+              })
+            }
+          : updatedData;
+
+      const sanitizedFeatures = (nextData.features as any[])
+        .map((feature) => {
+          const geometry = sanitizeAnnotationGeometry(feature.geometry ?? {});
+          return geometry ? { ...feature, geometry } : null;
+        })
+        .filter(Boolean);
+      const sanitizedData = { ...nextData, features: sanitizedFeatures };
+
+      commitAnnotationCollection(sanitizedData);
       const targetLayerId = props.activeLayerId ?? props.annotationLayers[0]?.id ?? "default-layer";
       props.onPersistAnnotations(
-        updatedData.features.map((feature: any) => ({
+        sanitizedData.features.map((feature: any) => ({
           id: String(feature.id ?? crypto.randomUUID()),
           layerId: String(feature.properties?.layerId ?? targetLayerId),
           geometry: {
@@ -523,7 +724,20 @@ export function ViewerCanvas(props: Props) {
         }))
       );
     }
-  });
+  }), [
+    annotationCollection,
+    annotationLayerById,
+    layerModelMatrix,
+    manifest,
+    props.activeLayerId,
+    props.annotationLayers,
+    props.annotationOperation,
+    props.onPersistAnnotations,
+    props.onSelectAnnotation,
+    props.selectedAnnotationId,
+    props.tool,
+    selectedFeatureIndexes
+  ]);
 
   const visibleWindow = useMemo(() => visibleSlideWindow(manifest, viewState, viewerSize, scale), [manifest, scale, viewState, viewerSize]);
   const minimapHeight = useMemo(() => Math.round((MINIMAP_WIDTH * manifest.height) / manifest.width), [manifest.height, manifest.width]);
@@ -556,29 +770,29 @@ export function ViewerCanvas(props: Props) {
     return <div role="alert">Viewer failed to load</div>;
   }
 
+  const normalizedRotation = ((viewState.rotationOrbit % 360) + 360) % 360;
+
   return (
     <div ref={containerRef} className="workspace-canvas">
-      {webglAvailable ? (
-        <DeckGL
-          controller={{ dragPan: true, touchRotate: false, scrollZoom: { speed: 0.01 }, doubleClickZoom: true }}
-          layers={[...bitmapLayers, ...overlayLayers, editableLayer]}
-          views={VIEW}
-          viewState={viewState}
-          onViewStateChange={({ viewState: next }) => {
-            const zoom = typeof next.zoom === "number" ? next.zoom : viewState.zoom;
-            const target: [number, number, number] = Array.isArray(next.target)
-              ? [Number(next.target[0] ?? viewState.target[0]), Number(next.target[1] ?? viewState.target[1]), 0]
-              : viewState.target;
-            setViewState({ target, zoom });
-          }}
-          style={{ position: "absolute", inset: "0" }}
-        />
-      ) : null}
-      {!webglAvailable ? (
-        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "white" }}>
-          WebGL unavailable. The tile viewer requires a browser WebGL context.
-        </div>
-      ) : null}
+      <DeckGL
+        controller={drawToolActive ? false : { dragPan: true, touchRotate: false, scrollZoom: { speed: 0.01 }, doubleClickZoom: true, keyboard: true }}
+        getCursor={({ isDragging }) => cursorForTool(props.tool, isDragging)}
+        layers={[...bitmapLayers, ...overlayLayers, editableLayer]}
+        views={VIEW}
+        viewState={viewState}
+        onViewStateChange={drawToolActive ? undefined : ({ viewState: next }) => {
+          const zoom = typeof next.zoom === "number" ? next.zoom : viewState.zoom;
+          const target: [number, number, number] = Array.isArray(next.target)
+            ? [Number(next.target[0] ?? viewState.target[0]), Number(next.target[1] ?? viewState.target[1]), 0]
+            : viewState.target;
+          setViewState({
+            target,
+            zoom,
+            rotationOrbit: typeof next.rotationOrbit === "number" ? next.rotationOrbit : viewState.rotationOrbit
+          });
+        }}
+        style={{ position: "absolute", inset: "0" }}
+      />
       {status === "loading" ? (
         <div style={{ position: "absolute", left: 12, top: 12, padding: "6px 10px", borderRadius: 999, background: "rgba(15,23,42,0.72)", color: "white", zIndex: 4 }}>
           Loading level {level.level}…
@@ -616,6 +830,49 @@ export function ViewerCanvas(props: Props) {
           }));
         }}
       />
+      <div className="workspace-rotation-control" aria-label="Rotation control">
+        <button
+          type="button"
+          className="workspace-rotation-control__button"
+          aria-label="Rotate slide"
+          title="Drag to rotate"
+          onPointerDown={(event) => {
+            rotationDragRef.current = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startRotation: viewState.rotationOrbit
+            };
+            setRotationTooltip(`${Math.round(normalizedRotation)}°`);
+            (event.currentTarget as HTMLButtonElement).setPointerCapture?.(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const drag = rotationDragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const deltaX = event.clientX - drag.startX;
+            const nextRotation = drag.startRotation + deltaX;
+            setViewState((current) => ({ ...current, rotationOrbit: nextRotation }));
+            const normalized = ((nextRotation % 360) + 360) % 360;
+            setRotationTooltip(`${Math.round(normalized)}°`);
+          }}
+          onPointerUp={(event) => {
+            if (rotationDragRef.current?.pointerId === event.pointerId) {
+              rotationDragRef.current = null;
+              setRotationTooltip(null);
+            }
+            (event.currentTarget as HTMLButtonElement).releasePointerCapture?.(event.pointerId);
+          }}
+          onPointerCancel={(event) => {
+            if (rotationDragRef.current?.pointerId === event.pointerId) {
+              rotationDragRef.current = null;
+              setRotationTooltip(null);
+            }
+            (event.currentTarget as HTMLButtonElement).releasePointerCapture?.(event.pointerId);
+          }}
+        >
+          {rotationTooltip ? <div className="workspace-rotation-control__tooltip">{rotationTooltip}</div> : null}
+          <RotateCw className="workspace-rotation-control__icon" strokeWidth={1.8} />
+        </button>
+      </div>
     </div>
   );
 }

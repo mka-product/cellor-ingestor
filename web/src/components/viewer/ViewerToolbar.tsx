@@ -1,3 +1,22 @@
+import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
+import {
+  BringToFront,
+  CircleHelp,
+  Hand,
+  Info,
+  Layers3,
+  Maximize2,
+  MessageSquarePlus,
+  MinusSquare,
+  MousePointer2,
+  PenLine,
+  RotateCcw,
+  SquarePlus,
+  SquaresUnite,
+  ZoomIn,
+  ZoomOut
+} from "lucide-react";
+
 type Props = {
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -14,60 +33,150 @@ type Props = {
   fullscreen: boolean;
   tool: string;
   onToolChange: (tool: string) => void;
+  annotationOperation: AnnotationBooleanMode;
+  effectiveAnnotationOperation: AnnotationBooleanMode;
+  onAnnotationOperationChange: (operation: AnnotationBooleanMode) => void;
 };
 
 const TOOLS = [
-  { id: "view", label: "View", title: "View" },
-  { id: "modify", label: "Select", title: "Select" },
-  { id: "point", label: "Point", title: "Point" },
-  { id: "line", label: "Line", title: "Line" },
-  { id: "rectangle", label: "Rect", title: "Rectangle" },
-  { id: "polygon", label: "Poly", title: "Polygon" }
+  { id: "view", title: "Navigate", icon: Hand },
+  { id: "modify", title: "Select", icon: MousePointer2 },
+  { id: "line", title: "Line", icon: PenLine },
+  { id: "polygon", title: "Polygon", icon: BringToFront }
+];
+
+const BOOLEAN_OPERATIONS: Array<{
+  id: AnnotationBooleanMode;
+  title: string;
+  icon: typeof SquarePlus;
+}> = [
+  { id: "create", title: "Create independent annotations", icon: SquarePlus },
+  { id: "merge", title: "Merge overlapping annotations", icon: SquaresUnite },
+  { id: "subtract", title: "Subtract overlapping annotations", icon: MinusSquare }
+];
+
+const VIEW_ACTIONS: Array<{
+  id: "zoom-out" | "zoom-in" | "reset" | "fullscreen";
+  title: string;
+  icon: typeof ZoomOut;
+}> = [
+  { id: "zoom-out", title: "Zoom Out", icon: ZoomOut },
+  { id: "zoom-in", title: "Zoom In", icon: ZoomIn },
+  { id: "reset", title: "Reset View", icon: RotateCcw },
+  { id: "fullscreen", title: "Fullscreen", icon: Maximize2 }
+];
+
+const PANEL_ACTIONS = [
+  { id: "metadata", title: "Metadata", icon: Info },
+  { id: "overlays", title: "Overlays", icon: Layers3 },
+  { id: "annotations", title: "Annotations", icon: MessageSquarePlus },
+  { id: "help", title: "Shortcuts", icon: CircleHelp }
 ];
 
 export function ViewerToolbar(props: Props) {
-  return (
-    <div className="workspace-toolbar">
-      {TOOLS.map((tool) => (
-        <button
-          key={tool.id}
-          type="button"
-          className={props.tool === tool.id ? "is-active" : undefined}
-          onClick={() => props.onToolChange(tool.id)}
-          title={tool.title}
-        >
-          {tool.label}
-        </button>
-      ))}
-      <button type="button" onClick={props.onZoomOut} title="Zoom Out">
-        Zoom Out
-      </button>
-      <button type="button" onClick={props.onZoomIn} title="Zoom In">
-        Zoom In
-      </button>
-      <button type="button" onClick={props.onReset} title="Reset View">
-        Reset
-      </button>
-      <button type="button" className={props.metadataOpen ? "is-active" : undefined} onClick={props.onToggleMetadata} title="Metadata">
-        Metadata
-      </button>
-      <button type="button" className={props.overlaysOpen ? "is-active" : undefined} onClick={props.onToggleOverlays} title="Overlays">
-        Overlays
-      </button>
+  const renderActionButton = (
+    action: { id: string; title: string; icon: typeof ZoomOut },
+    className = "workspace-toolbar__button"
+  ) => {
+    const Icon = action.icon;
+    const isActive =
+      action.id === "metadata"
+        ? props.metadataOpen
+        : action.id === "overlays"
+          ? props.overlaysOpen
+          : action.id === "annotations"
+            ? props.annotationsOpen
+            : action.id === "help"
+              ? props.helpOpen
+              : props.fullscreen;
+    const onClick =
+      action.id === "zoom-out"
+        ? props.onZoomOut
+        : action.id === "zoom-in"
+          ? props.onZoomIn
+          : action.id === "reset"
+            ? props.onReset
+            : action.id === "metadata"
+              ? props.onToggleMetadata
+              : action.id === "overlays"
+                ? props.onToggleOverlays
+                : action.id === "annotations"
+                  ? props.onToggleAnnotations
+                  : action.id === "help"
+                    ? props.onToggleHelp
+                    : props.onToggleFullscreen;
+
+    return (
       <button
+        key={action.id}
         type="button"
-        className={props.annotationsOpen ? "is-active" : undefined}
-        onClick={props.onToggleAnnotations}
-        title="Annotations"
+        className={`${className}${isActive ? " is-active" : ""}`}
+        onClick={onClick}
+        title={action.title}
+        aria-label={action.title}
       >
-        Annotations
+        <Icon className="workspace-toolbar__icon" strokeWidth={1.8} />
       </button>
-      <button type="button" className={props.helpOpen ? "is-active" : undefined} onClick={props.onToggleHelp} title="Shortcuts">
-        Help
-      </button>
-      <button type="button" className={props.fullscreen ? "is-active" : undefined} onClick={props.onToggleFullscreen} title="Fullscreen">
-        Fullscreen
-      </button>
-    </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="workspace-toolbar workspace-toolbar--left">
+        <div className="workspace-toolbar__section" aria-label="Tools">
+          {TOOLS.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <button
+                key={tool.id}
+                type="button"
+                className={`workspace-toolbar__button${props.tool === tool.id ? " is-active" : ""}`}
+                onClick={() => props.onToolChange(tool.id)}
+                title={tool.title}
+                aria-label={tool.title}
+              >
+                <Icon className="workspace-toolbar__icon" strokeWidth={1.8} />
+              </button>
+            );
+          })}
+        </div>
+        <div className="workspace-toolbar__divider" />
+        <div className="workspace-toolbar__section" aria-label="Annotation operation">
+          {BOOLEAN_OPERATIONS.map((operation) => {
+            const Icon = operation.icon;
+            return (
+              <button
+                key={operation.id}
+                type="button"
+                className={[
+                  "workspace-toolbar__button",
+                  props.effectiveAnnotationOperation === operation.id ? "is-active" : "",
+                  props.annotationOperation !== props.effectiveAnnotationOperation &&
+                  props.annotationOperation === operation.id
+                    ? "is-armed"
+                    : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => props.onAnnotationOperationChange(operation.id)}
+                title={operation.title}
+                aria-label={operation.title}
+              >
+                <Icon className="workspace-toolbar__icon" strokeWidth={1.8} />
+              </button>
+            );
+          })}
+        </div>
+        <div className="workspace-toolbar__divider" />
+        <div className="workspace-toolbar__section" aria-label="Panels">
+          {PANEL_ACTIONS.map((action) => renderActionButton(action))}
+        </div>
+      </div>
+      <div className="workspace-toolbar workspace-toolbar--bottom-right">
+        <div className="workspace-toolbar__section" aria-label="View controls">
+          {VIEW_ACTIONS.map((action) => renderActionButton(action, "workspace-toolbar__button workspace-toolbar__button--compact"))}
+        </div>
+      </div>
+    </>
   );
 }

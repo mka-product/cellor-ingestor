@@ -33,6 +33,7 @@ import { OverlayStylePanel } from "./OverlayStylePanel";
 import { ViewerCanvas } from "./ViewerCanvas";
 import { ViewerToolbar } from "./ViewerToolbar";
 import { WorkspaceShortcuts } from "./WorkspaceShortcuts";
+import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
 
 type Props = {
   manifest: ViewerManifest;
@@ -42,16 +43,16 @@ type PanelId = "metadata" | "layers" | "annotation" | "comments" | "overlays" | 
 type PanelLayout = Record<PanelId, { x: number; y: number; zIndex: number }>;
 
 const INITIAL_STATE: ViewerWorkspaceState = {
-  showMetadata: true,
-  showOverlays: true,
-  showAnnotations: true,
+  showMetadata: false,
+  showOverlays: false,
+  showAnnotations: false,
   showHelp: false,
   isFullscreen: false,
   selectedOverlayId: null,
   selectedAnnotationId: null,
   activeLayerId: null,
-  showComments: true,
-  showAnnotationEditor: true,
+  showComments: false,
+  showAnnotationEditor: false,
   showOverlayStyle: false
 };
 
@@ -89,6 +90,7 @@ function flattenThread(comments: AnnotationComment[]) {
 
 export function ViewerWorkspace({ manifest }: Props) {
   const workspaceRef = useRef<HTMLElement | null>(null);
+  const annotationsRef = useRef<AnnotationFeature[]>([]);
   const [workspace, setWorkspace] = useState(INITIAL_STATE);
   const [panelLayout, setPanelLayout] = useState(INITIAL_LAYOUT);
   const [tool, setTool] = useState("view");
@@ -99,6 +101,8 @@ export function ViewerWorkspace({ manifest }: Props) {
   const [annotations, setAnnotations] = useState<AnnotationFeature[]>([]);
   const [comments, setComments] = useState<AnnotationComment[]>([]);
   const [viewportStats, setViewportStats] = useState({ level: 0, visibleTiles: 0, totalVisibleReferences: 0 });
+  const [annotationOperation, setAnnotationOperation] = useState<AnnotationBooleanMode>("create");
+  const [operationModifier, setOperationModifier] = useState<AnnotationBooleanMode | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -186,14 +190,45 @@ export function ViewerWorkspace({ manifest }: Props) {
       }
       if (key === "1") setTool("view");
       if (key === "2") setTool("modify");
-      if (key === "3") setTool("point");
-      if (key === "4") setTool("line");
-      if (key === "5") setTool("rectangle");
-      if (key === "6") setTool("polygon");
+      if (key === "3") setTool("line");
+      if (key === "4") setTool("polygon");
     };
+    const updateModifier = (event: KeyboardEvent) => {
+      if (event.altKey) {
+        setOperationModifier("subtract");
+        return;
+      }
+      if (event.shiftKey) {
+        setOperationModifier("merge");
+        return;
+      }
+      setOperationModifier(null);
+    };
+    const clearModifier = (event: KeyboardEvent) => {
+      if (event.altKey) {
+        setOperationModifier("subtract");
+        return;
+      }
+      if (event.shiftKey) {
+        setOperationModifier("merge");
+        return;
+      }
+      setOperationModifier(null);
+    };
+    const resetModifier = () => setOperationModifier(null);
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", updateModifier);
+    window.addEventListener("keyup", clearModifier);
+    window.addEventListener("blur", resetModifier);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keydown", updateModifier);
+      window.removeEventListener("keyup", clearModifier);
+      window.removeEventListener("blur", resetModifier);
+    };
   }, []);
+
+  const effectiveAnnotationOperation = operationModifier ?? annotationOperation;
 
   const selectedAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === workspace.selectedAnnotationId) ?? null,
@@ -227,6 +262,10 @@ export function ViewerWorkspace({ manifest }: Props) {
 
   const threadedComments = useMemo(() => flattenThread(comments), [comments]);
 
+  useEffect(() => {
+    annotationsRef.current = annotations;
+  }, [annotations]);
+
   const bumpPanel = (panelId: PanelId) => {
     setPanelLayout((current) => ({
       ...current,
@@ -239,9 +278,29 @@ export function ViewerWorkspace({ manifest }: Props) {
   };
 
   const persistAnnotations = async (features: AnnotationFeature[]) => {
+    const previous = annotationsRef.current;
     setAnnotations(features);
-    for (const feature of features) {
-      await saveAnnotation(manifest.slideId, feature);
+    annotationsRef.current = features;
+
+    const previousById = new Map(previous.map((feature) => [feature.id, feature]));
+    const nextById = new Map(features.map((feature) => [feature.id, feature]));
+    const nextIds = new Set(features.map((feature) => feature.id));
+    const removed = previous.filter((feature) => !nextIds.has(feature.id));
+    const changed = features.filter((feature) => {
+      const current = previousById.get(feature.id);
+      if (!current) return true;
+      return JSON.stringify(current) !== JSON.stringify(feature);
+    });
+
+    try {
+      await Promise.all([
+        ...removed.map((feature) => deleteAnnotation(manifest.slideId, feature.id)),
+        ...changed.map((feature) => saveAnnotation(manifest.slideId, feature))
+      ]);
+    } catch (error) {
+      annotationsRef.current = previous;
+      setAnnotations(previous);
+      console.error("Failed to persist annotations", error);
     }
   };
 
@@ -279,6 +338,9 @@ export function ViewerWorkspace({ manifest }: Props) {
         fullscreen={workspace.isFullscreen}
         tool={tool}
         onToolChange={setTool}
+        annotationOperation={annotationOperation}
+        effectiveAnnotationOperation={effectiveAnnotationOperation}
+        onAnnotationOperationChange={setAnnotationOperation}
       />
       <ViewerCanvas
         manifest={manifest}
@@ -286,6 +348,7 @@ export function ViewerWorkspace({ manifest }: Props) {
         annotationLayers={annotationLayers.filter((layer) => layer.isVisible)}
         annotations={annotations}
         tool={tool}
+        annotationOperation={effectiveAnnotationOperation}
         activeLayerId={workspace.activeLayerId}
         selectedOverlayId={workspace.selectedOverlayId}
         selectedAnnotationId={workspace.selectedAnnotationId}

@@ -13,6 +13,8 @@ type Props = {
 export function MetadataPanel({ manifest, position, zIndex, onPositionChange, onBringToFront, onClose }: Props) {
   const metadata = manifest.metadata;
   const metrics = manifest.provenance.metrics;
+  const mppX = typeof metadata?.micronsPerPixel?.x === "number" ? metadata.micronsPerPixel.x.toFixed(3) : "?";
+  const mppY = typeof metadata?.micronsPerPixel?.y === "number" ? metadata.micronsPerPixel.y.toFixed(3) : "?";
 
   return (
     <FloatingPanelFrame
@@ -37,7 +39,7 @@ export function MetadataPanel({ manifest, position, zIndex, onPositionChange, on
         <div className="workspace-metric">
           <dt>MPP</dt>
           <dd>
-            {metadata?.micronsPerPixel?.x ?? "?"} × {metadata?.micronsPerPixel?.y ?? "?"} μm
+            {mppX} × {mppY} μm
           </dd>
         </div>
         <div className="workspace-metric">
@@ -53,10 +55,6 @@ export function MetadataPanel({ manifest, position, zIndex, onPositionChange, on
         <div className="workspace-metric">
           <dt>Tiles</dt>
           <dd>{metrics?.tileCount ?? "Unknown"}</dd>
-        </div>
-        <div className="workspace-metric">
-          <dt>Checksum</dt>
-          <dd>{manifest.provenance.sourceChecksum.slice(0, 12)}…</dd>
         </div>
       </dl>
     </FloatingPanelFrame>

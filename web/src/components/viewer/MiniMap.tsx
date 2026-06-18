@@ -50,8 +50,8 @@ export function MiniMap({ slideId, thumbnailPath, width, height, rect, onMoveToP
       }}
       style={{
         position: "absolute",
-        right: 16,
-        bottom: 16,
+        left: 16,
+        top: 16,
         width,
         height,
         borderRadius: 10,
