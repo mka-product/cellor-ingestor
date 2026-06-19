@@ -2,10 +2,40 @@ import type { AnnotationComment, AnnotationFeature, AnnotationLayer, OverlayFeat
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
+export class WorkspaceRequestError extends Error {
+  status: number;
+  detail?: string;
+
+  constructor(status: number, detail?: string) {
+    super(detail ? `workspace request failed: ${status} (${detail})` : `workspace request failed: ${status}`);
+    this.name = "WorkspaceRequestError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+async function extractErrorDetail(response: Response): Promise<string | undefined> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = (await response.json()) as { detail?: string };
+      return typeof payload.detail === "string" ? payload.detail : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  try {
+    const text = await response.text();
+    return text || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function parseJson<T>(input: Promise<Response>): Promise<T> {
   const response = await input;
   if (!response.ok) {
-    throw new Error(`workspace request failed: ${response.status}`);
+    throw new WorkspaceRequestError(response.status, await extractErrorDetail(response));
   }
   return (await response.json()) as T;
 }
@@ -42,7 +72,7 @@ export async function saveAnnotationLayer(
 export async function deleteAnnotationLayer(slideId: string, layerId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/slides/${slideId}/annotation-layers/${layerId}`, { method: "DELETE" });
   if (!response.ok) {
-    throw new Error(`delete annotation layer failed: ${response.status}`);
+    throw new WorkspaceRequestError(response.status, await extractErrorDetail(response));
   }
 }
 
@@ -66,7 +96,7 @@ export async function saveAnnotation(
 export async function deleteAnnotation(slideId: string, annotationId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/slides/${slideId}/annotations/${annotationId}`, { method: "DELETE" });
   if (!response.ok) {
-    throw new Error(`delete annotation failed: ${response.status}`);
+    throw new WorkspaceRequestError(response.status, await extractErrorDetail(response));
   }
 }
 
@@ -115,6 +145,6 @@ export async function deleteComment(slideId: string, annotationId: string, comme
     method: "DELETE"
   });
   if (!response.ok) {
-    throw new Error(`delete comment failed: ${response.status}`);
+    throw new WorkspaceRequestError(response.status, await extractErrorDetail(response));
   }
 }

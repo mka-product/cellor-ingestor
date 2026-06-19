@@ -34,6 +34,21 @@ export type AnnotationFeature = {
   updatedAt: string;
 };
 
+export type CommittedAnnotationEditType =
+  | "addFeature"
+  | "finishMovePosition"
+  | "removePosition"
+  | "addPosition"
+  | "deleteFeature"
+  | "split"
+  | "unionGeometry";
+
+export type AnnotationPersistenceError = {
+  message: string;
+  status?: number;
+  detail?: string;
+};
+
 export type AnnotationLayer = {
   id: string;
   name: string;

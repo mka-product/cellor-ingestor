@@ -585,6 +585,20 @@ body {
   font-size: var(--celnight-text-sm);
 }
 
+.workspace-inline-alert {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 7;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.85);
+  background: rgba(69, 10, 10, 0.92);
+  color: var(--celnight-text-primary);
+  font-size: var(--celnight-text-sm);
+  box-shadow: var(--celnight-shadow-soft);
+}
+
 @media (max-width: 960px) {
   .workspace-topbar {
     grid-template-columns: 1fr;

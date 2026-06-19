@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ViewerManifest } from "../../domain/contracts";
 import type {
   AnnotationComment,
   AnnotationFeature,
   AnnotationLayer,
+  AnnotationPersistenceError,
   OverlayClassStyle,
   OverlayFeature,
   OverlaySource,
@@ -22,7 +23,8 @@ import {
   fetchOverlaySources,
   saveAnnotation,
   saveAnnotationLayer,
-  updateComment
+  updateComment,
+  WorkspaceRequestError
 } from "../../infrastructure/workspaceClient";
 import { AnnotationEditPanel } from "./AnnotationEditPanel";
 import { CommentsPanel } from "./CommentsPanel";
@@ -91,6 +93,9 @@ function flattenThread(comments: AnnotationComment[]) {
 export function ViewerWorkspace({ manifest }: Props) {
   const workspaceRef = useRef<HTMLElement | null>(null);
   const annotationsRef = useRef<AnnotationFeature[]>([]);
+  const queuedPersistRef = useRef<{ next: AnnotationFeature[]; previous: AnnotationFeature[] } | null>(null);
+  const persistTimerRef = useRef<number | null>(null);
+  const flushInFlightRef = useRef<Promise<void> | null>(null);
   const [workspace, setWorkspace] = useState(INITIAL_STATE);
   const [panelLayout, setPanelLayout] = useState(INITIAL_LAYOUT);
   const [tool, setTool] = useState("view");
@@ -103,6 +108,7 @@ export function ViewerWorkspace({ manifest }: Props) {
   const [viewportStats, setViewportStats] = useState({ level: 0, visibleTiles: 0, totalVisibleReferences: 0 });
   const [annotationOperation, setAnnotationOperation] = useState<AnnotationBooleanMode>("create");
   const [operationModifier, setOperationModifier] = useState<AnnotationBooleanMode | null>(null);
+  const [annotationSaveError, setAnnotationSaveError] = useState<AnnotationPersistenceError | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -266,6 +272,14 @@ export function ViewerWorkspace({ manifest }: Props) {
     annotationsRef.current = annotations;
   }, [annotations]);
 
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, []);
+
   const bumpPanel = (panelId: PanelId) => {
     setPanelLayout((current) => ({
       ...current,
@@ -277,32 +291,75 @@ export function ViewerWorkspace({ manifest }: Props) {
     setPanelLayout((current) => ({ ...current, [panelId]: { ...current[panelId], x: position.x, y: position.y } }));
   };
 
-  const persistAnnotations = async (features: AnnotationFeature[]) => {
+  const rollbackAffectedAnnotations = useCallback((previous: AnnotationFeature[], failedIds: Set<string>) => {
+    setAnnotations((current) => {
+      const next = current.filter((feature) => !failedIds.has(feature.id));
+      const restored = previous.filter((feature) => failedIds.has(feature.id));
+      const merged = [...next, ...restored];
+      annotationsRef.current = merged;
+      return merged;
+    });
+  }, []);
+
+  const flushPersistQueue = useCallback(async () => {
+    if (flushInFlightRef.current) {
+      await flushInFlightRef.current;
+    }
+    const queued = queuedPersistRef.current;
+    if (!queued) return;
+    queuedPersistRef.current = null;
+
+    const job = (async () => {
+      const { next: features, previous } = queued;
+      const previousById = new Map(previous.map((feature) => [feature.id, feature]));
+      const nextIds = new Set(features.map((feature) => feature.id));
+      const removed = previous.filter((feature) => !nextIds.has(feature.id));
+      const changed = features.filter((feature) => {
+        const current = previousById.get(feature.id);
+        if (!current) return true;
+        return JSON.stringify(current) !== JSON.stringify(feature);
+      });
+      const affectedIds = new Set([...removed.map((feature) => feature.id), ...changed.map((feature) => feature.id)]);
+
+      try {
+        await Promise.all([
+          ...removed.map((feature) => deleteAnnotation(manifest.slideId, feature.id)),
+          ...changed.map((feature) => saveAnnotation(manifest.slideId, feature))
+        ]);
+        setAnnotationSaveError(null);
+      } catch (error) {
+        rollbackAffectedAnnotations(previous, affectedIds);
+        setAnnotationSaveError(
+          error instanceof WorkspaceRequestError
+            ? { message: error.detail ?? error.message, status: error.status, detail: error.detail }
+            : { message: error instanceof Error ? error.message : "Failed to persist annotations" }
+        );
+      } finally {
+        flushInFlightRef.current = null;
+      }
+    })();
+
+    flushInFlightRef.current = job;
+    await job;
+    if (queuedPersistRef.current) {
+      await flushPersistQueue();
+    }
+  }, [manifest.slideId, rollbackAffectedAnnotations]);
+
+  const persistAnnotations = useCallback((features: AnnotationFeature[]) => {
     const previous = annotationsRef.current;
     setAnnotations(features);
     annotationsRef.current = features;
-
-    const previousById = new Map(previous.map((feature) => [feature.id, feature]));
-    const nextById = new Map(features.map((feature) => [feature.id, feature]));
-    const nextIds = new Set(features.map((feature) => feature.id));
-    const removed = previous.filter((feature) => !nextIds.has(feature.id));
-    const changed = features.filter((feature) => {
-      const current = previousById.get(feature.id);
-      if (!current) return true;
-      return JSON.stringify(current) !== JSON.stringify(feature);
-    });
-
-    try {
-      await Promise.all([
-        ...removed.map((feature) => deleteAnnotation(manifest.slideId, feature.id)),
-        ...changed.map((feature) => saveAnnotation(manifest.slideId, feature))
-      ]);
-    } catch (error) {
-      annotationsRef.current = previous;
-      setAnnotations(previous);
-      console.error("Failed to persist annotations", error);
+    setAnnotationSaveError(null);
+    queuedPersistRef.current = { next: features, previous };
+    if (persistTimerRef.current != null) {
+      window.clearTimeout(persistTimerRef.current);
     }
-  };
+    persistTimerRef.current = window.setTimeout(() => {
+      persistTimerRef.current = null;
+      void flushPersistQueue();
+    }, 120);
+  }, [flushPersistQueue]);
 
   const selectedLayer = annotationLayers.find((layer) => layer.id === workspace.activeLayerId) ?? annotationLayers[0] ?? null;
 
@@ -316,6 +373,27 @@ export function ViewerWorkspace({ manifest }: Props) {
     setAnnotationLayers((current) => [...current, layer]);
     setWorkspace((current) => ({ ...current, activeLayerId: layer.id }));
   };
+
+  const handleSelectOverlay = useCallback(
+    (overlayId: string | null) =>
+      setWorkspace((current) => ({
+        ...current,
+        selectedOverlayId: overlayId,
+        showOverlayStyle: overlayId != null
+      })),
+    []
+  );
+
+  const handleSelectAnnotation = useCallback(
+    (annotationId: string | null) =>
+      setWorkspace((current) => ({
+        ...current,
+        selectedAnnotationId: annotationId,
+        showComments: annotationId != null,
+        showAnnotationEditor: annotationId != null
+      })),
+    []
+  );
 
   return (
     <section ref={workspaceRef} className={`workspace-body ${workspace.isFullscreen ? "is-fullscreen" : ""}`}>
@@ -342,6 +420,11 @@ export function ViewerWorkspace({ manifest }: Props) {
         effectiveAnnotationOperation={effectiveAnnotationOperation}
         onAnnotationOperationChange={setAnnotationOperation}
       />
+      {annotationSaveError ? (
+        <div className="workspace-inline-alert" role="alert">
+          Annotation save failed: {annotationSaveError.detail ?? annotationSaveError.message}
+        </div>
+      ) : null}
       <ViewerCanvas
         manifest={manifest}
         overlayFeatures={styledOverlayFeatures}
@@ -350,26 +433,10 @@ export function ViewerWorkspace({ manifest }: Props) {
         tool={tool}
         annotationOperation={effectiveAnnotationOperation}
         activeLayerId={workspace.activeLayerId}
-        selectedOverlayId={workspace.selectedOverlayId}
         selectedAnnotationId={workspace.selectedAnnotationId}
-        onSelectOverlay={(overlayId) =>
-          setWorkspace((current) => ({
-            ...current,
-            selectedOverlayId: overlayId,
-            showOverlayStyle: overlayId != null
-          }))
-        }
-        onSelectAnnotation={(annotationId) =>
-          setWorkspace((current) => ({
-            ...current,
-            selectedAnnotationId: annotationId,
-            showComments: annotationId != null,
-            showAnnotationEditor: annotationId != null
-          }))
-        }
-        onPersistAnnotations={(features) => {
-          void persistAnnotations(features);
-        }}
+        onSelectOverlay={handleSelectOverlay}
+        onSelectAnnotation={handleSelectAnnotation}
+        onPersistAnnotations={persistAnnotations}
         onViewportStatsChange={setViewportStats}
       />
       {workspace.showMetadata ? (

@@ -1,12 +1,5 @@
 import { OrthographicView } from "@deck.gl/core";
-import {
-  EditableGeoJsonLayer,
-  DrawLineStringMode,
-  DrawPolygonMode,
-  ModifyMode,
-  ViewMode
-} from "@deck.gl-community/editable-layers";
-import { BitmapLayer, PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { BitmapLayer } from "@deck.gl/layers";
 import DeckGL from "@deck.gl/react";
 import { Matrix4 } from "@math.gl/core";
 import { RotateCw } from "lucide-react";
@@ -16,9 +9,14 @@ import type { ViewerManifest } from "../../domain/contracts";
 import type { AnnotationFeature, AnnotationLayer, OverlayFeature } from "../../domain/workspace";
 import { TileIndexLookup, decodeTileIndex } from "../../infrastructure/indexCodec";
 import { buildTileGroupUrl, fetchTileGroup, fetchTileIndex } from "../../infrastructure/manifestClient";
-import { applyAnnotationBooleanOperation, type AnnotationBooleanMode } from "../../viewer/annotationBoolean";
+import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
+import { sanitizeAnnotationFeature } from "../../viewer/annotationGeometry";
 import { selectLevel } from "../../viewer/lod";
+import { createOverlayLayers } from "../../viewer/overlayLayers";
 import { TileCache } from "../../viewer/tileCache";
+import { createBitmapLayers } from "../../viewer/tileBitmapLayers";
+import { createAnnotationEditorLayer } from "./AnnotationEditorLayer";
+import { useBufferedFeatureCollection } from "./useBufferedFeatureCollection";
 import {
   DEFAULT_VIEWER_SIZE,
   MINIMAP_WIDTH,
@@ -41,7 +39,6 @@ type Props = {
   tool: string;
   annotationOperation: AnnotationBooleanMode;
   activeLayerId: string | null;
-  selectedOverlayId: string | null;
   selectedAnnotationId: string | null;
   onSelectOverlay: (overlayId: string | null) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
@@ -188,46 +185,6 @@ function worldCoordinatesToImage(manifest: ViewerManifest, coordinates: unknown)
   return coordinates.map((entry) => worldCoordinatesToImage(manifest, entry));
 }
 
-function overlayStrokeWidth(feature: OverlayFeature): number {
-  return typeof feature.styleHints.strokeWidth === "number" ? feature.styleHints.strokeWidth : 2;
-}
-
-function overlayColor(feature: OverlayFeature, fallback: [number, number, number, number]): [number, number, number, number] {
-  if (Array.isArray(feature.styleHints.color) && feature.styleHints.color.length >= 3) {
-    const values = feature.styleHints.color as number[];
-    return [values[0] ?? fallback[0], values[1] ?? fallback[1], values[2] ?? fallback[2], values[3] ?? fallback[3]];
-  }
-  return fallback;
-}
-
-function annotationColor(layer: AnnotationLayer | undefined): [number, number, number, number] {
-  if (!layer) return [251, 191, 36, 180];
-  const normalized = layer.color.replace("#", "");
-  const value = normalized.length === 3 ? normalized.split("").map((part) => part + part).join("") : normalized;
-  const parsed = Number.parseInt(value, 16);
-  return [parsed >> 16, (parsed >> 8) & 255, parsed & 255, 180];
-}
-
-function alphaFromOpacity(opacity: unknown, fallback: number): number {
-  const normalized = Number(opacity);
-  if (!Number.isFinite(normalized)) return fallback;
-  return Math.max(0, Math.min(255, Math.round(normalized * 255)));
-}
-
-function colorFromHex(
-  value: unknown,
-  fallback: [number, number, number, number],
-  opacity?: unknown
-): [number, number, number, number] {
-  const alpha = alphaFromOpacity(opacity, fallback[3]);
-  if (typeof value !== "string" || !value.startsWith("#")) return fallback;
-  const normalized = value.replace("#", "");
-  const full = normalized.length === 3 ? normalized.split("").map((part) => part + part).join("") : normalized;
-  const parsed = Number.parseInt(full, 16);
-  if (Number.isNaN(parsed)) return fallback;
-  return [parsed >> 16, (parsed >> 8) & 255, parsed & 255, alpha];
-}
-
 function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel: number | null): string {
   if (!Number.isFinite(pixelDistance) || pixelDistance <= 0) {
     return "";
@@ -245,81 +202,6 @@ function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel
   return `Distance: ${microns.toFixed(0)} μm`;
 }
 
-function distanceBetweenPoints(a: number[], b: number[]): number {
-  const dx = (b[0] ?? 0) - (a[0] ?? 0);
-  const dy = (b[1] ?? 0) - (a[1] ?? 0);
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-function isFinitePosition(value: unknown): value is number[] {
-  return Array.isArray(value) && value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1]);
-}
-
-function positionsEqual(a: number[], b: number[]) {
-  return a[0] === b[0] && a[1] === b[1];
-}
-
-function sanitizeLineCoordinates(coordinates: unknown): number[][] | null {
-  if (!Array.isArray(coordinates)) return null;
-  const points = coordinates.filter(isFinitePosition).map((point) => [Number(point[0]), Number(point[1])]);
-  return points.length >= 2 ? points : null;
-}
-
-function sanitizePolygonRing(ring: unknown): number[][] | null {
-  if (!Array.isArray(ring)) return null;
-  const points = ring.filter(isFinitePosition).map((point) => [Number(point[0]), Number(point[1])]);
-  if (points.length < 3) return null;
-  const uniquePoints = points.filter(
-    (point, index) => index === 0 || !positionsEqual(point, points[index - 1] as number[])
-  );
-  if (uniquePoints.length < 3) return null;
-  const closedRing = positionsEqual(uniquePoints[0] as number[], uniquePoints[uniquePoints.length - 1] as number[])
-    ? uniquePoints
-    : [...uniquePoints, uniquePoints[0] as number[]];
-  return closedRing.length >= 4 ? closedRing : null;
-}
-
-function sanitizePolygonCoordinates(coordinates: unknown): number[][][] | null {
-  if (!Array.isArray(coordinates) || coordinates.length === 0) return null;
-  const rings = coordinates
-    .map((ring) => sanitizePolygonRing(ring))
-    .filter((ring): ring is number[][] => ring !== null);
-  return rings.length > 0 ? rings : null;
-}
-
-function sanitizeAnnotationGeometry(geometry: Record<string, unknown>): Record<string, unknown> | null {
-  const type = String(geometry.type ?? "");
-  if (type === "Polygon") {
-    const coordinates = sanitizePolygonCoordinates(geometry.coordinates);
-    return coordinates ? { type, coordinates } : null;
-  }
-  if (type === "LineString") {
-    const coordinates = sanitizeLineCoordinates(geometry.coordinates);
-    return coordinates ? { type, coordinates } : null;
-  }
-  if (type === "Point") {
-    const coordinates = isFinitePosition(geometry.coordinates)
-      ? [Number((geometry.coordinates as number[])[0]), Number((geometry.coordinates as number[])[1])]
-      : null;
-    return coordinates ? { type, coordinates } : null;
-  }
-  return null;
-}
-
-function sanitizeAnnotationFeature(feature: AnnotationFeature): AnnotationFeature | null {
-  const geometry = sanitizeAnnotationGeometry(feature.geometry);
-  return geometry ? { ...feature, geometry } : null;
-}
-
-class PixelAccurateDrawLineStringMode extends DrawLineStringMode {
-  calculateInfoDraw(clickSequence: number[][]) {
-    if (clickSequence.length > 1) {
-      this.position = clickSequence[clickSequence.length - 1] as any;
-      this.dist += distanceBetweenPoints(clickSequence[clickSequence.length - 2], clickSequence[clickSequence.length - 1]);
-    }
-  }
-}
-
 export function ViewerCanvas(props: Props) {
   const { manifest } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -329,38 +211,22 @@ export function ViewerCanvas(props: Props) {
   const pendingTileRef = useRef(new Map<string, Promise<void>>());
   const scaleBarDraggedRef = useRef(false);
   const rotationDragRef = useRef<{ pointerId: number; startX: number; startRotation: number } | null>(null);
-  const annotationCollectionRef = useRef<any>({ type: "FeatureCollection", features: [] });
-  const pendingAnnotationCollectionRef = useRef<any | null>(null);
-  const annotationFrameRef = useRef<number | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>(DEFAULT_VIEWER_SIZE);
   const [viewState, setViewState] = useState<ViewState>(createInitialViewState(manifest, DEFAULT_VIEWER_SIZE));
   const [status, setStatus] = useState("loading");
   const [indexRevision, setIndexRevision] = useState(0);
   const [tileRevision, setTileRevision] = useState(0);
-  const [annotationCollection, setAnnotationCollection] = useState<any>({ type: "FeatureCollection", features: [] });
   const [scaleBarPosition, setScaleBarPosition] = useState({ x: 16, y: DEFAULT_VIEWER_SIZE.height - 64 });
   const [rotationTooltip, setRotationTooltip] = useState<string | null>(null);
+  const {
+    collection: annotationCollection,
+    collectionRef: annotationCollectionRef,
+    commitCollection: commitAnnotationCollection,
+    scheduleCollectionUpdate: scheduleAnnotationCollectionUpdate
+  } = useBufferedFeatureCollection({ type: "FeatureCollection", features: [] });
   const resetViewer = () => setViewState(createInitialViewState(manifest, viewerSize));
   const zoomInViewer = () => setViewState((current) => ({ ...current, zoom: Math.min(current.zoom + 0.5, 10) }));
   const zoomOutViewer = () => setViewState((current) => ({ ...current, zoom: Math.max(current.zoom - 0.5, -10) }));
-
-  const commitAnnotationCollection = (nextCollection: any) => {
-    annotationCollectionRef.current = nextCollection;
-    setAnnotationCollection(nextCollection);
-  };
-
-  const scheduleAnnotationCollectionUpdate = (nextCollection: any) => {
-    pendingAnnotationCollectionRef.current = nextCollection;
-    if (annotationFrameRef.current != null) return;
-    annotationFrameRef.current = window.requestAnimationFrame(() => {
-      annotationFrameRef.current = null;
-      const pending = pendingAnnotationCollectionRef.current;
-      pendingAnnotationCollectionRef.current = null;
-      if (pending) {
-        commitAnnotationCollection(pending);
-      }
-    });
-  };
 
   useEffect(() => {
     const nextCollection = {
@@ -384,14 +250,6 @@ export function ViewerCanvas(props: Props) {
     };
     commitAnnotationCollection(nextCollection);
   }, [manifest, props.annotations]);
-
-  useEffect(() => {
-    return () => {
-      if (annotationFrameRef.current != null) {
-        window.cancelAnimationFrame(annotationFrameRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     setViewState(createInitialViewState(manifest, viewerSize));
@@ -517,21 +375,7 @@ export function ViewerCanvas(props: Props) {
   );
 
   const bitmapLayers = useMemo(() => {
-    return renderLevels
-      .flatMap((renderLevel) =>
-        renderLevel.tiles.map((tile) => {
-          const image = tileCacheRef.current.get(tile.key);
-          if (!image) return null;
-          return new BitmapLayer({
-            id: `${renderLevel.isFallback ? "fallback" : "primary"}:${tile.key}`,
-            image,
-            bounds: tile.bounds,
-            opacity: 1,
-            modelMatrix: layerModelMatrix
-          });
-        })
-      )
-      .filter(Boolean);
+    return createBitmapLayers(renderLevels, (tileKey) => tileCacheRef.current.get(tileKey), layerModelMatrix);
   }, [layerModelMatrix, renderLevels, tileRevision]) as BitmapLayer[];
 
   useEffect(() => {
@@ -579,42 +423,14 @@ export function ViewerCanvas(props: Props) {
   );
 
   const overlayLayers = useMemo(
-    () => [
-      new PolygonLayer({
-        id: "overlay-polygons",
-        data: polygonOverlays,
-        getPolygon: (item: (typeof polygonOverlays)[number]) => item.polygon[0] ?? [],
-        getLineColor: (item: (typeof polygonOverlays)[number]) => overlayColor(item, [56, 189, 248, 255]),
-        getFillColor: (item: (typeof polygonOverlays)[number]) => overlayColor(item, [56, 189, 248, 70]),
-        lineWidthUnits: "pixels",
-        getLineWidth: (item: (typeof polygonOverlays)[number]) => overlayStrokeWidth(item),
+    () =>
+      createOverlayLayers({
+        polygonOverlays,
+        lineOverlays,
+        pointOverlays,
         modelMatrix: layerModelMatrix,
-        pickable: true,
-        onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
+        onSelectOverlay: props.onSelectOverlay
       }),
-      new PathLayer({
-        id: "overlay-lines",
-        data: lineOverlays,
-        getPath: (item: (typeof lineOverlays)[number]) => item.path as any,
-        getColor: (item: (typeof lineOverlays)[number]) => overlayColor(item, [244, 114, 182, 255]),
-        widthUnits: "pixels",
-        getWidth: (item: (typeof lineOverlays)[number]) => overlayStrokeWidth(item),
-        modelMatrix: layerModelMatrix,
-        pickable: true,
-        onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
-      }),
-      new ScatterplotLayer({
-        id: "overlay-points",
-        data: pointOverlays,
-        getPosition: (item: (typeof pointOverlays)[number]) => item.position as [number, number],
-        getRadius: () => 16,
-        radiusUnits: "pixels",
-        getFillColor: (item: (typeof pointOverlays)[number]) => overlayColor(item, [251, 191, 36, 255]),
-        modelMatrix: layerModelMatrix,
-        pickable: true,
-        onClick: (info: { object?: { id: string } }) => props.onSelectOverlay(info.object?.id ?? null)
-      })
-    ],
     [layerModelMatrix, lineOverlays, pointOverlays, polygonOverlays, props.onSelectOverlay]
   );
 
@@ -634,96 +450,23 @@ export function ViewerCanvas(props: Props) {
     [props.annotationLayers]
   );
 
-  const editableLayer = useMemo(() => new EditableGeoJsonLayer({
-    id: "annotations",
-    data: annotationCollection,
-    coordinateSystem: "cartesian",
-    modeConfig: {
-      formatTooltip: (distance: number) =>
-        formatPhysicalDistanceFromPixels(distance, manifest.metadata?.micronsPerPixel?.x ?? manifest.metadata?.micronsPerPixel?.y ?? null)
-    },
-    mode:
-      props.tool === "modify"
-        ? ModifyMode
-        : props.tool === "line"
-            ? PixelAccurateDrawLineStringMode
-            : props.tool === "polygon"
-              ? DrawPolygonMode
-              : ViewMode,
+  const editableLayer = useMemo(() => createAnnotationEditorLayer({
+    annotationCollection,
+    annotationCollectionRef,
+    manifest,
+    tool: props.tool,
     selectedFeatureIndexes,
-    getFillColor: (feature: { properties?: { layerId?: string; style?: { color?: string; opacity?: number } } }) =>
-      colorFromHex(
-        feature.properties?.style?.color,
-        annotationColor(annotationLayerById.get(String(feature.properties?.layerId ?? ""))),
-        feature.properties?.style?.opacity
-      ),
-    getLineColor: (feature: { properties?: { layerId?: string; style?: { color?: string; opacity?: number } } }) =>
-      colorFromHex(
-        feature.properties?.style?.color,
-        annotationColor(annotationLayerById.get(String(feature.properties?.layerId ?? ""))),
-        feature.properties?.style?.opacity
-      ),
-    getLineWidth: (feature: { properties?: { style?: { lineWidth?: number } } }) => Number(feature.properties?.style?.lineWidth ?? 2),
+    annotationLayerById,
     modelMatrix: layerModelMatrix,
-    pickable: true,
-    onClick: (info: { object?: { id?: string } }) => props.onSelectAnnotation((info.object?.id as string | null) ?? null),
-    onEdit: ({ updatedData, editType }: { updatedData: any; editType: string }) => {
-      const isCommittedAdd = editType === "addFeature";
-      const isTentative =
-        editType === "addTentativePosition" ||
-        editType === "updateTentativeFeature" ||
-        editType === "invalidPolygon" ||
-        editType === "invalidHole" ||
-        editType === "movePosition";
-
-      if (isTentative) {
-        scheduleAnnotationCollectionUpdate(updatedData);
-        return;
-      }
-
-      if (editType === "cancelFeature") {
-        commitAnnotationCollection(updatedData);
-        return;
-      }
-
-      const nextData =
-        isCommittedAdd
-          ? {
-              ...updatedData,
-              features: applyAnnotationBooleanOperation({
-                previousFeatures: annotationCollectionRef.current.features as any[],
-                updatedFeatures: updatedData.features as any[],
-                operation: props.annotationOperation,
-                activeLayerId: props.activeLayerId
-              })
-            }
-          : updatedData;
-
-      const sanitizedFeatures = (nextData.features as any[])
-        .map((feature) => {
-          const geometry = sanitizeAnnotationGeometry(feature.geometry ?? {});
-          return geometry ? { ...feature, geometry } : null;
-        })
-        .filter(Boolean);
-      const sanitizedData = { ...nextData, features: sanitizedFeatures };
-
-      commitAnnotationCollection(sanitizedData);
-      const targetLayerId = props.activeLayerId ?? props.annotationLayers[0]?.id ?? "default-layer";
-      props.onPersistAnnotations(
-        sanitizedData.features.map((feature: any) => ({
-          id: String(feature.id ?? crypto.randomUUID()),
-          layerId: String(feature.properties?.layerId ?? targetLayerId),
-          geometry: {
-            type: feature.geometry.type,
-            coordinates: worldCoordinatesToImage(manifest, feature.geometry.coordinates)
-          },
-          properties: feature.properties ?? {},
-          style: feature.properties?.style ?? {},
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }))
-      );
-    }
+    onSelectAnnotation: props.onSelectAnnotation,
+    onTransientUpdate: scheduleAnnotationCollectionUpdate,
+    onCommittedUpdate: commitAnnotationCollection,
+    onPersistCommittedFeatures: props.onPersistAnnotations,
+    activeLayerId: props.activeLayerId,
+    visibleAnnotationLayers: props.annotationLayers,
+    annotationOperation: props.annotationOperation,
+    formatDistance: formatPhysicalDistanceFromPixels,
+    worldCoordinatesToImage: (coordinates) => worldCoordinatesToImage(manifest, coordinates)
   }), [
     annotationCollection,
     annotationLayerById,

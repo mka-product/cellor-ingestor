@@ -53,4 +53,30 @@ describe("applyAnnotationBooleanOperation", () => {
     expect(result[0].geometry.type).toBe("Polygon");
     expect(JSON.stringify(result[0].geometry.coordinates)).toContain("5");
   });
+
+  it("ignores boolean operations for non-polygon created features", () => {
+    const previous = [rectangleFeature("a", 0, 0, 10, 10)];
+    const created: AnnotationCanvasFeature = {
+      type: "Feature",
+      id: "line-1",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [0, 0],
+          [5, 5]
+        ]
+      },
+      properties: { layerId: "layer-1" }
+    };
+
+    const result = applyAnnotationBooleanOperation({
+      previousFeatures: previous,
+      updatedFeatures: [...previous, created],
+      operation: "merge",
+      activeLayerId: "layer-1"
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result[1].geometry.type).toBe("LineString");
+  });
 });

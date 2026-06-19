@@ -6,6 +6,7 @@ Failure modes: missing resources raise LookupError; duplicate identities remain 
 
 from __future__ import annotations
 
+from api.api_service.application.review_validation import validate_annotation_geometry
 from uuid import uuid4
 
 from api.api_service.application.dto import (
@@ -307,6 +308,7 @@ class ReviewApplicationService:
         properties: dict[str, object],
         style: dict[str, object],
     ) -> dict[str, object]:
+        validate_annotation_geometry(geometry)
         persisted = self._annotations.save(
             AnnotationFeature(
                 annotation_id=AnnotationId(annotation_id or f"annotation-{uuid4().hex[:12]}"),

@@ -214,6 +214,28 @@ def test_overlay_and_review_routes_roundtrip() -> None:
     assert len(list_comments.json()) == 2
 
 
+def test_annotation_validation_returns_422_for_invalid_polygon() -> None:
+    _reset_workspace_files()
+    layer_response = client.put(
+        "/slides/slide-invalid/annotation-layers",
+        json={"name": "Review Layer", "color": "#f97316", "isVisible": True, "isLocked": False},
+    )
+    layer_id = layer_response.json()["id"]
+
+    response = client.put(
+        "/slides/slide-invalid/annotations",
+        json={
+            "layerId": layer_id,
+            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [100, 0], [0, 0]]]},
+            "properties": {"label": "Broken"},
+            "style": {"color": "#f97316"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid polygon annotation geometry"
+
+
 def test_overlay_detail_returns_404_for_missing_overlay() -> None:
     response = client.get("/slides/missing-slide/overlays/missing-overlay")
     assert response.status_code == 404

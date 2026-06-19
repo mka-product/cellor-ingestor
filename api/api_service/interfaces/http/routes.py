@@ -229,14 +229,17 @@ def list_annotations(slide_id: str, container: Container = Depends(get_container
 def save_annotation(
     slide_id: str, payload: AnnotationRequest, container: Container = Depends(get_container)
 ) -> AnnotationResponse:
-    result = container.review_service.save_annotation(
-        slide_id,
-        annotation_id=payload.id,
-        layer_id=payload.layerId,
-        geometry=payload.geometry,
-        properties=payload.properties,
-        style=payload.style,
-    )
+    try:
+        result = container.review_service.save_annotation(
+            slide_id,
+            annotation_id=payload.id,
+            layer_id=payload.layerId,
+            geometry=payload.geometry,
+            properties=payload.properties,
+            style=payload.style,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return AnnotationResponse(**result)
 
 

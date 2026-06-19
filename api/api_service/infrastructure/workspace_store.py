@@ -7,6 +7,7 @@ Failure modes: malformed workspace JSON raises runtime errors and invalid identi
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,8 @@ from api.api_service.domain.models import (
     OverlayId,
     SlideId,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _utc_from_string(value: str | None) -> datetime:
@@ -74,9 +77,32 @@ class FileOverlayRepository:
         )
 
     def _read(self) -> dict[str, Any]:
-        payload = json.loads(self.path.read_text())
+        payload = self._load_json_payload()
         payload.setdefault("slides", {})
         return payload
+
+    def _load_json_payload(self) -> dict[str, Any]:
+        raw = self.path.read_text()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as error:
+            decoder = json.JSONDecoder()
+            try:
+                payload, index = decoder.raw_decode(raw.lstrip())
+            except json.JSONDecodeError:
+                LOGGER.exception("Overlay store is unreadable: %s", self.path)
+                raise
+            trailing = raw.lstrip()[index:].strip()
+            if trailing:
+                LOGGER.warning("Overlay store contained trailing data and was auto-repaired: %s", self.path)
+                self._write_json_payload(payload)
+            else:
+                LOGGER.exception("Overlay store is unreadable: %s", self.path)
+                raise error
+        return payload
+
+    def _write_json_payload(self, payload: dict[str, Any]) -> None:
+        self.path.write_text(json.dumps(payload, indent=2))
 
 
 @dataclass
@@ -248,12 +274,32 @@ class FileReviewRepository:
         )
 
     def _read(self) -> dict[str, Any]:
-        payload = json.loads(self.path.read_text())
+        payload = self._load_json_payload()
         payload.setdefault("slides", {})
         return payload
 
     def _write(self, payload: dict[str, Any]) -> None:
         self.path.write_text(json.dumps(payload, indent=2))
+
+    def _load_json_payload(self) -> dict[str, Any]:
+        raw = self.path.read_text()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as error:
+            decoder = json.JSONDecoder()
+            try:
+                payload, index = decoder.raw_decode(raw.lstrip())
+            except json.JSONDecodeError:
+                LOGGER.exception("Review store is unreadable: %s", self.path)
+                raise
+            trailing = raw.lstrip()[index:].strip()
+            if trailing:
+                LOGGER.warning("Review store contained trailing data and was auto-repaired: %s", self.path)
+                self._write(payload)
+            else:
+                LOGGER.exception("Review store is unreadable: %s", self.path)
+                raise error
+        return payload
 
     def _replace_or_append(self, items: list[dict[str, Any]], value: dict[str, Any], identity_key: str) -> None:
         for index, existing in enumerate(items):
