@@ -47,6 +47,7 @@ class IngestionJobView:
     slide_id: str
     version_id: str
     status: str
+    display_name: str | None = None
     reader_backend: str | None = None
     metadata_backend: str | None = None
     progress_percent: float | None = None

@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from io import BytesIO
+from typing import Any
 
 from minio import Minio
+from minio.error import S3Error
 
 
 @dataclass
@@ -39,9 +42,40 @@ class MinioProxy:
         payload, _ = self.get_s3_bytes(object_path)
         return json.loads(payload.decode("utf-8"))
 
+    def load_json_or_default(self, object_path: str, default: dict[str, Any]) -> dict[str, Any]:
+        try:
+            payload = self.load_json(object_path)
+        except S3Error as error:
+            if error.code in {"NoSuchKey", "NoSuchBucket", "NoSuchObject"}:
+                return default
+            raise
+        return dict(payload)
+
+    def put_json(self, object_path: str, payload: dict[str, Any]) -> None:
+        self.put_bytes(object_path, json.dumps(payload, indent=2).encode("utf-8"), "application/json")
+
+    def object_exists(self, object_path: str) -> bool:
+        bucket, key = self.split_uri(object_path)
+        try:
+            self.client.stat_object(bucket, key)
+        except S3Error as error:
+            if error.code in {"NoSuchKey", "NoSuchBucket", "NoSuchObject"}:
+                return False
+            raise
+        return True
+
+    def put_bytes(self, object_path: str, payload: bytes, media_type: str = "application/octet-stream") -> None:
+        bucket, key = self.split_uri(object_path)
+        if not self.client.bucket_exists(bucket):
+            self.client.make_bucket(bucket)
+        self.client.put_object(bucket, key, BytesIO(payload), len(payload), content_type=media_type)
+
     def proxy_url(self, object_path: str) -> str:
-        bucket, key = self._split(object_path)
+        bucket, key = self.split_uri(object_path)
         return f"{self.public_base_path}/{bucket}/{key}"
+
+    def rewrite_payload(self, payload: object) -> object:
+        return self._rewrite(payload)
 
     def _rewrite(self, payload: object) -> object:
         if isinstance(payload, dict):
@@ -52,6 +86,9 @@ class MinioProxy:
             return self.proxy_url(payload)
         return payload
 
-    def _split(self, path: str) -> tuple[str, str]:
+    def split_uri(self, path: str) -> tuple[str, str]:
         stripped = path.removeprefix("s3://")
         return stripped.split("/", 1)
+
+    def _split(self, path: str) -> tuple[str, str]:
+        return self.split_uri(path)

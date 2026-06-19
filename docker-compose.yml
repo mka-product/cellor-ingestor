@@ -53,6 +53,7 @@ services:
       - "8080:80"
 
   worker:
+    profiles: ["manual"]
     build:
       context: .
       dockerfile: worker/Dockerfile

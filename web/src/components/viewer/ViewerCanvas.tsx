@@ -12,6 +12,7 @@ import { buildTileGroupUrl, fetchTileGroup, fetchTileIndex } from "../../infrast
 import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
 import { sanitizeAnnotationFeature } from "../../viewer/annotationGeometry";
 import { selectLevel } from "../../viewer/lod";
+import type { OverlayWindow } from "../../viewer/overlayManifest";
 import { createOverlayLayers } from "../../viewer/overlayLayers";
 import { TileCache } from "../../viewer/tileCache";
 import { createBitmapLayers } from "../../viewer/tileBitmapLayers";
@@ -43,7 +44,29 @@ type Props = {
   onSelectOverlay: (overlayId: string | null) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onPersistAnnotations: (features: AnnotationFeature[]) => void;
+  remotePresence?: Array<{
+    userId: string;
+    x: number;
+    y: number;
+    zoom: number;
+    slideX?: number;
+    slideY?: number;
+    viewport?: OverlayWindow;
+    centerX?: number;
+    centerY?: number;
+  }>;
+  onPresenceUpdate?: (payload: {
+    x: number;
+    y: number;
+    zoom: number;
+    slideX: number;
+    slideY: number;
+    viewport: OverlayWindow;
+    centerX: number;
+    centerY: number;
+  }) => void;
   onViewportStatsChange?: (payload: { level: number; visibleTiles: number; totalVisibleReferences: number }) => void;
+  onVisibleWindowChange?: (payload: OverlayWindow) => void;
 };
 
 type TileReference = {
@@ -202,6 +225,15 @@ function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel
   return `Distance: ${microns.toFixed(0)} μm`;
 }
 
+function formatPresenceMagnification(manifest: ViewerManifest, zoom: number): string {
+  const scale = 2 ** zoom;
+  const objectivePower = manifest.metadata?.objectivePower;
+  if (typeof objectivePower === "number" && Number.isFinite(objectivePower) && objectivePower > 0) {
+    return `${(objectivePower * scale).toFixed(1)}x`;
+  }
+  return `${scale.toFixed(1)}x`;
+}
+
 export function ViewerCanvas(props: Props) {
   const { manifest } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -211,6 +243,7 @@ export function ViewerCanvas(props: Props) {
   const pendingTileRef = useRef(new Map<string, Promise<void>>());
   const scaleBarDraggedRef = useRef(false);
   const rotationDragRef = useRef<{ pointerId: number; startX: number; startRotation: number } | null>(null);
+  const lastPresencePointerRef = useRef<{ x: number; y: number; slideX: number; slideY: number } | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>(DEFAULT_VIEWER_SIZE);
   const [viewState, setViewState] = useState<ViewState>(createInitialViewState(manifest, DEFAULT_VIEWER_SIZE));
   const [status, setStatus] = useState("loading");
@@ -483,6 +516,25 @@ export function ViewerCanvas(props: Props) {
   ]);
 
   const visibleWindow = useMemo(() => visibleSlideWindow(manifest, viewState, viewerSize, scale), [manifest, scale, viewState, viewerSize]);
+
+  useEffect(() => {
+    props.onVisibleWindowChange?.(visibleWindow);
+  }, [props.onVisibleWindowChange, visibleWindow]);
+
+  useEffect(() => {
+    const pointer = lastPresencePointerRef.current;
+    props.onPresenceUpdate?.({
+      x: pointer?.x ?? 0.5,
+      y: pointer?.y ?? 0.5,
+      zoom: viewState.zoom,
+      slideX: pointer?.slideX ?? viewState.target[0],
+      slideY: pointer?.slideY ?? worldToTopDownY(manifest.height, viewState.target[1]),
+      viewport: visibleWindow,
+      centerX: viewState.target[0],
+      centerY: worldToTopDownY(manifest.height, viewState.target[1]),
+    });
+  }, [manifest.height, props.onPresenceUpdate, viewState.target, viewState.zoom, visibleWindow]);
+
   const minimapHeight = useMemo(() => Math.round((MINIMAP_WIDTH * manifest.height) / manifest.width), [manifest.height, manifest.width]);
   const minimapRect = useMemo(() => {
     const left = (visibleWindow.left / manifest.width) * MINIMAP_WIDTH;
@@ -491,6 +543,45 @@ export function ViewerCanvas(props: Props) {
     const height = ((visibleWindow.bottom - visibleWindow.top) / manifest.height) * minimapHeight;
     return { left, top, width, height };
   }, [manifest.height, manifest.width, minimapHeight, visibleWindow]);
+  const remoteMinimapRects = useMemo(
+    () =>
+      (props.remotePresence ?? [])
+        .filter((presence) => presence.viewport)
+        .map((presence) => ({
+          userId: presence.userId,
+          left: ((presence.viewport!.left ?? 0) / manifest.width) * MINIMAP_WIDTH,
+          top: ((presence.viewport!.top ?? 0) / manifest.height) * minimapHeight,
+          width: (((presence.viewport!.right ?? 0) - (presence.viewport!.left ?? 0)) / manifest.width) * MINIMAP_WIDTH,
+          height: (((presence.viewport!.bottom ?? 0) - (presence.viewport!.top ?? 0)) / manifest.height) * minimapHeight
+        })),
+    [manifest.height, manifest.width, minimapHeight, props.remotePresence]
+  );
+
+  const projectedRemotePresence = useMemo(() => {
+    const width = Math.max(1, visibleWindow.right - visibleWindow.left);
+    const height = Math.max(1, visibleWindow.bottom - visibleWindow.top);
+    return (props.remotePresence ?? [])
+      .map((presence) => {
+        if (typeof presence.slideX !== "number" || typeof presence.slideY !== "number") {
+          return {
+            userId: presence.userId,
+            zoom: presence.zoom,
+            leftPercent: presence.x * 100,
+            topPercent: presence.y * 100,
+            isOffscreen: false
+          };
+        }
+        const localX = ((presence.slideX - visibleWindow.left) / width) * 100;
+        const localY = ((presence.slideY - visibleWindow.top) / height) * 100;
+        return {
+          userId: presence.userId,
+          zoom: presence.zoom,
+          leftPercent: Math.max(0, Math.min(100, localX)),
+          topPercent: Math.max(0, Math.min(100, localY)),
+          isOffscreen: localX < 0 || localX > 100 || localY < 0 || localY > 100
+        };
+      });
+  }, [props.remotePresence, visibleWindow.bottom, visibleWindow.left, visibleWindow.right, visibleWindow.top]);
 
   const scaleBar = useMemo(() => {
     const mpp = manifest.metadata?.micronsPerPixel?.x ?? manifest.metadata?.micronsPerPixel?.y;
@@ -516,7 +607,31 @@ export function ViewerCanvas(props: Props) {
   const normalizedRotation = ((viewState.rotationOrbit % 360) + 360) % 360;
 
   return (
-    <div ref={containerRef} className="workspace-canvas">
+    <div
+      ref={containerRef}
+      className="workspace-canvas"
+      onPointerMove={(event) => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect || !props.onPresenceUpdate) return;
+        const x = (event.clientX - rect.left) / Math.max(1, rect.width);
+        const y = (event.clientY - rect.top) / Math.max(1, rect.height);
+        const normalizedX = Math.max(0, Math.min(1, x));
+        const normalizedY = Math.max(0, Math.min(1, y));
+        const slideX = visibleWindow.left + normalizedX * (visibleWindow.right - visibleWindow.left);
+        const slideY = visibleWindow.top + normalizedY * (visibleWindow.bottom - visibleWindow.top);
+        lastPresencePointerRef.current = { x: normalizedX, y: normalizedY, slideX, slideY };
+        props.onPresenceUpdate({
+          x: normalizedX,
+          y: normalizedY,
+          zoom: viewState.zoom,
+          slideX,
+          slideY,
+          viewport: visibleWindow,
+          centerX: viewState.target[0],
+          centerY: worldToTopDownY(manifest.height, viewState.target[1])
+        });
+      }}
+    >
       <DeckGL
         controller={drawToolActive ? false : { dragPan: true, touchRotate: false, scrollZoom: { speed: 0.01 }, doubleClickZoom: true, keyboard: true }}
         getCursor={({ isDragging }) => cursorForTool(props.tool, isDragging)}
@@ -556,6 +671,7 @@ export function ViewerCanvas(props: Props) {
         width={MINIMAP_WIDTH}
         height={minimapHeight}
         rect={minimapRect}
+        remoteRects={remoteMinimapRects}
         onMoveToPoint={(normalizedX, normalizedY) => {
           setViewState((current) => ({
             ...current,
@@ -616,6 +732,18 @@ export function ViewerCanvas(props: Props) {
           <RotateCw className="workspace-rotation-control__icon" strokeWidth={1.8} />
         </button>
       </div>
+      {projectedRemotePresence.map((presence) => (
+        <div
+          key={presence.userId}
+          className={`workspace-remote-cursor${presence.isOffscreen ? " is-offscreen" : ""}`}
+          style={{ left: `${presence.leftPercent}%`, top: `${presence.topPercent}%` }}
+          title={`${presence.userId} · ${formatPresenceMagnification(manifest, presence.zoom)}`}
+        >
+          <span className="workspace-remote-cursor__label">
+            {presence.userId} · {formatPresenceMagnification(manifest, presence.zoom)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

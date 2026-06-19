@@ -15,9 +15,12 @@ from api.api_service.domain.models import (
     AnnotationId,
     AnnotationLayer,
     AnnotationLayerId,
+    AnnotationReview,
+    CommentId,
     IngestionJob,
     OverlayDefinition,
     OverlayId,
+    SlideTag,
     Slide,
     SlideId,
     SlideVersion,
@@ -60,6 +63,8 @@ class OverlayRepository(Protocol):
 
     def get(self, slide_id: SlideId, overlay_id: OverlayId) -> OverlayDefinition | None: ...
 
+    def save(self, overlay: OverlayDefinition) -> OverlayDefinition: ...
+
 
 class AnnotationLayerRepository(Protocol):
     def list_for_slide(self, slide_id: SlideId) -> list[AnnotationLayer]: ...
@@ -89,3 +94,15 @@ class CommentRepository(Protocol):
     def get(self, slide_id: SlideId, annotation_id: AnnotationId, comment_id: CommentId) -> AnnotationComment | None: ...
 
     def delete(self, slide_id: SlideId, annotation_id: AnnotationId, comment_id: str) -> None: ...
+
+
+class TagRepository(Protocol):
+    def list_for_slide(self, slide_id: SlideId) -> list[SlideTag]: ...
+
+    def replace_for_slide(self, slide_id: SlideId, tags: list[SlideTag]) -> list[SlideTag]: ...
+
+
+class ReviewRepository(Protocol):
+    def list_for_annotation(self, slide_id: SlideId, annotation_id: AnnotationId) -> list[AnnotationReview]: ...
+
+    def save(self, review: AnnotationReview) -> AnnotationReview: ...

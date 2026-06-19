@@ -1,7 +1,17 @@
 fastapi==0.116.1
 uvicorn==0.35.0
+websockets==15.0.1
+python-multipart==0.0.20
 pydantic==2.11.7
 pytest==8.4.1
 httpx==0.28.1
 jsonschema==4.25.0
 minio==7.2.8
+pyarrow==21.0.0
+shapely==2.1.1
+Pillow==11.3.0
+numpy==2.2.6
+openslide-python==1.4.1
+psutil==6.1.0
+pyvips==2.2.3
+fastslide==0.7.4

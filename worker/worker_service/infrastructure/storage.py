@@ -97,7 +97,7 @@ class FileCatalogRegistry:
     def __post_init__(self) -> None:
         self.catalog_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.catalog_path.exists():
-            self.catalog_path.write_text(json.dumps({"slides": [], "jobs": []}, indent=2))
+            self.catalog_path.write_text(json.dumps({"slides": [], "jobs": [], "overlay_jobs": []}, indent=2))
 
     def mark_manifest_ready(self, slide_id: str, version_id: str, manifest_path: str) -> None:
         catalog = self._read()
@@ -145,6 +145,7 @@ class FileCatalogRegistry:
         payload = json.loads(self.catalog_path.read_text())
         payload.setdefault("slides", [])
         payload.setdefault("jobs", [])
+        payload.setdefault("overlay_jobs", [])
         return payload
 
     def _write(self, payload: dict[str, list[dict[str, object]]]) -> None:

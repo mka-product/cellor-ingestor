@@ -24,6 +24,41 @@ export type OverlayFeature = {
   bounds: [number, number, number, number];
 };
 
+export type OverlayChunkSummary = {
+  id: string;
+  bounds: [number, number, number, number];
+  featureCount: number;
+  path: string;
+};
+
+export type OverlayManifest = {
+  schema: string;
+  slideId: string;
+  overlayId: string;
+  name: string;
+  kind: string;
+  versionId: string;
+  sourceFormat: string;
+  coordinateSpace: Record<string, unknown>;
+  runtimeFormat: string;
+  featureCount: number;
+  bounds: [number, number, number, number];
+  legend: Array<Record<string, unknown>>;
+  metadata: Record<string, unknown>;
+  chunking: {
+    strategy: string;
+    chunkSize: number;
+    chunks: OverlayChunkSummary[];
+  };
+};
+
+export type OverlayChunk = {
+  id: string;
+  bounds: [number, number, number, number];
+  featureCount: number;
+  features: OverlayFeature[];
+};
+
 export type AnnotationFeature = {
   id: string;
   layerId: string;
@@ -63,6 +98,21 @@ export type AnnotationComment = {
   body: string;
   author: string;
   parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SlideTag = {
+  value: string;
+  color: string;
+};
+
+export type AnnotationReview = {
+  id: string;
+  annotationId: string;
+  status: string;
+  reviewer: string;
+  note: string;
   createdAt: string;
   updatedAt: string;
 };

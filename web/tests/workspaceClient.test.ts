@@ -1,6 +1,17 @@
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
-import { createComment, deleteComment, fetchAnnotationLayers, fetchOverlayDetail, fetchOverlaySources, saveAnnotation, updateComment } from "../src/infrastructure/workspaceClient";
+import {
+  createComment,
+  deleteComment,
+  fetchAnnotationLayers,
+  fetchOverlayChunkAtPath,
+  fetchOverlayChunk,
+  fetchOverlayDetail,
+  fetchOverlayManifest,
+  fetchOverlaySources,
+  saveAnnotation,
+  updateComment
+} from "../src/infrastructure/workspaceClient";
 
 describe("workspaceClient", () => {
   beforeEach(() => {
@@ -20,13 +31,64 @@ describe("workspaceClient", () => {
 
   test("fetchOverlayDetail hits overlay detail endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "overlay-1", name: "Regions", kind: "vector", features: [], legend: [] }), { status: 200 })
+      new Response(JSON.stringify({ id: "overlay-1", name: "Regions", kind: "vector", delivery: {}, features: [], legend: [] }), { status: 200 })
     );
 
     const result = await fetchOverlayDetail("slide-1", "overlay-1");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/slides/slide-1/overlays/overlay-1", { signal: undefined });
     expect(result.id).toBe("overlay-1");
+  });
+
+  test("fetchOverlayManifest hits overlay manifest endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          schema: "overlay-manifest-v1",
+          slideId: "slide-1",
+          overlayId: "overlay-1",
+          name: "Regions",
+          kind: "vector",
+          versionId: "v1",
+          sourceFormat: "geojson",
+          coordinateSpace: { origin: "top-left", unit: "level-0-pixel" },
+          runtimeFormat: "inline",
+          featureCount: 0,
+          bounds: [0, 0, 0, 0],
+          legend: [],
+          metadata: {},
+          chunking: { strategy: "spatial-fixed-grid", chunkSize: 2048, chunks: [] }
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await fetchOverlayManifest("slide-1", "overlay-1");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/slides/slide-1/overlays/overlay-1/manifest", { signal: undefined });
+    expect(result.schema).toBe("overlay-manifest-v1");
+  });
+
+  test("fetchOverlayChunk hits overlay chunk endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "chunk-0-0", bounds: [0, 0, 10, 10], featureCount: 0, features: [] }), { status: 200 })
+    );
+
+    const result = await fetchOverlayChunk("slide-1", "overlay-1", "chunk-0-0");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/slides/slide-1/overlays/overlay-1/chunks/chunk-0-0", { signal: undefined });
+    expect(result.id).toBe("chunk-0-0");
+  });
+
+  test("fetchOverlayChunkAtPath hits direct chunk path", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "chunk-0-0", bounds: [0, 0, 10, 10], featureCount: 0, features: [] }), { status: 200 })
+    );
+
+    const result = await fetchOverlayChunkAtPath("/storage/derived/chunk-0-0.ovsib");
+
+    expect(fetchMock).toHaveBeenCalledWith("/storage/derived/chunk-0-0.ovsib", { signal: undefined });
+    expect(result.id).toBe("chunk-0-0");
   });
 
   test("saveAnnotation uses PUT with serialized payload", async () => {

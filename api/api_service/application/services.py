@@ -6,7 +6,16 @@ Failure modes: missing resources raise LookupError; duplicate identities remain 
 
 from __future__ import annotations
 
+import hashlib
+import tempfile
+from copy import deepcopy
+from dataclasses import replace
+from pathlib import Path
+from time import perf_counter
 from api.api_service.application.review_validation import validate_annotation_geometry
+from api.api_service.application.overlay_artifacts import publish_overlay_artifacts
+from api.api_service.application.overlay_delivery import build_overlay_manifest, load_overlay_chunk
+from api.api_service.application.overlay_ingestion import parse_overlay_source, to_overlay_definition
 from uuid import uuid4
 
 from api.api_service.application.dto import (
@@ -24,7 +33,9 @@ from api.api_service.application.ports import (
     IngestionJobRepository,
     JobQueue,
     OverlayRepository,
+    ReviewRepository,
     SlideRepository,
+    TagRepository,
     SlideVersionRepository,
 )
 from api.api_service.domain.events import IngestionRequested, OriginalUploaded
@@ -34,10 +45,12 @@ from api.api_service.domain.models import (
     AnnotationId,
     AnnotationLayer,
     AnnotationLayerId,
+    AnnotationReview,
     Checksum,
     CommentId,
     IngestionJob,
     OverlayId,
+    SlideTag,
     Slide,
     SlideId,
     SlideVersion,
@@ -106,12 +119,14 @@ class UploadApplicationService:
             version = existing_version
 
         existing_job = self._jobs.get_by_version(version.slide_id, version.version_id)
+        display_name = Path(command.original_path).name or command.slide_id
         if existing_job is not None:
             return IngestionJobView(
                 job_id=existing_job.job_id,
                 slide_id=existing_job.slide_id.value,
                 version_id=existing_job.version_id.value,
                 status=existing_job.status.value,
+                display_name=display_name,
                 reader_backend=command.reader_backend or "fastslide",
                 metadata_backend=command.metadata_backend or "openslide",
                 progress_percent=0.0,
@@ -133,6 +148,7 @@ class UploadApplicationService:
                 "slide_id": job.slide_id.value,
                 "version_id": job.version_id.value,
                 "status": job.status.value,
+                "display_name": display_name,
                 "reader_backend": command.reader_backend or "fastslide",
                 "metadata_backend": command.metadata_backend or "openslide",
                 "progress_percent": 0.0,
@@ -154,6 +170,7 @@ class UploadApplicationService:
             slide_id=job.slide_id.value,
             version_id=job.version_id.value,
             status=job.status.value,
+            display_name=display_name,
             reader_backend=command.reader_backend or "fastslide",
             metadata_backend=command.metadata_backend or "openslide",
             progress_percent=0.0,
@@ -210,10 +227,19 @@ class OverlayQueryService:
         overlay = self._overlays.get(SlideId(slide_id), OverlayId(overlay_id))
         if overlay is None:
             raise LookupError("overlay not found")
+        manifest = build_overlay_manifest(overlay)
         return {
             "id": overlay.overlay_id.value,
             "name": overlay.name,
             "kind": overlay.kind,
+            "sourceFormat": overlay.source_format,
+            "versionId": overlay.version_id,
+            "metadata": overlay.metadata,
+            "delivery": {
+                "manifestPath": f"/slides/{overlay.slide_id.value}/overlays/{overlay.overlay_id.value}/manifest",
+                "detailMode": "inline",
+                "chunkCount": len(manifest["chunking"]["chunks"]),
+            },
             "features": [
                 {
                     "id": feature.id,
@@ -229,6 +255,137 @@ class OverlayQueryService:
             "legend": list(overlay.legend),
         }
 
+    def get_overlay_manifest(self, slide_id: str, overlay_id: str) -> dict[str, object]:
+        overlay = self._overlays.get(SlideId(slide_id), OverlayId(overlay_id))
+        if overlay is None:
+            raise LookupError("overlay not found")
+        return build_overlay_manifest(overlay)
+
+    def get_overlay_chunk(self, slide_id: str, overlay_id: str, chunk_id: str) -> dict[str, object]:
+        overlay = self._overlays.get(SlideId(slide_id), OverlayId(overlay_id))
+        if overlay is None:
+            raise LookupError("overlay not found")
+        return load_overlay_chunk(overlay, chunk_id)
+
+
+class OverlayIngestionApplicationService:
+    def __init__(self, overlays: OverlayRepository, catalog, minio_proxy=None) -> None:
+        self._overlays = overlays
+        self._catalog = catalog
+        self._minio_proxy = minio_proxy
+
+    def ingest_upload(
+        self,
+        *,
+        slide_id: str,
+        filename: str,
+        source_format: str,
+        payload: bytes,
+        display_name: str | None = None,
+    ) -> dict[str, object]:
+        overlay_id = f"overlay-{uuid4().hex[:12]}"
+        version_id = f"v-{uuid4().hex[:12]}"
+        job_id = f"overlay-job-{uuid4().hex[:12]}"
+        checksum = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+        started_at = utc_now().isoformat()
+        started = perf_counter()
+        self._catalog.upsert_overlay_job(
+            {
+                "job_id": job_id,
+                "slide_id": slide_id,
+                "overlay_id": overlay_id,
+                "version_id": version_id,
+                "filename": filename,
+                "source_format": source_format,
+                "status": "running",
+                "stage": "parsing",
+                "progress_percent": 10.0,
+                "message": "Parsing overlay source",
+                "started_at": started_at,
+                "updated_at": started_at,
+                "metrics": {},
+            }
+        )
+        suffix = Path(filename).suffix or ".bin"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+            handle.write(payload)
+            temp_path = Path(handle.name)
+        try:
+            parse_started = perf_counter()
+            parsed = parse_overlay_source(temp_path, source_format, display_name or Path(filename).stem)
+            parse_seconds = round(perf_counter() - parse_started, 3)
+            overlay = to_overlay_definition(slide_id, overlay_id, version_id, parsed)
+            publish_seconds = 0.0
+            if self._minio_proxy is not None and source_format != "ovsi":
+                publish_started = perf_counter()
+                publication = publish_overlay_artifacts(self._minio_proxy, overlay)
+                publish_seconds = round(perf_counter() - publish_started, 3)
+                metadata = deepcopy(overlay.metadata)
+                metadata["runtimeFormat"] = publication.runtime_format
+                metadata["artifact"] = publication.artifact
+                metadata["chunkPaths"] = publication.chunk_paths
+                overlay = replace(overlay, metadata=metadata)
+            finished_at = utc_now().isoformat()
+            chunk_count = len(build_overlay_manifest(overlay)["chunking"]["chunks"])
+            self._overlays.save(overlay)
+            result = {
+                "job_id": job_id,
+                "slide_id": slide_id,
+                "overlay_id": overlay.overlay_id.value,
+                "version_id": overlay.version_id,
+                "filename": filename,
+                "name": overlay.name,
+                "source_format": overlay.source_format,
+                "status": "succeeded",
+                "stage": "published",
+                "progress_percent": 100.0,
+                "message": f"Published {len(overlay.features)} features",
+                "feature_count": len(overlay.features),
+                "kind": overlay.kind,
+                "checksum": checksum,
+                "runtime_format": overlay.metadata.get("runtimeFormat"),
+                "artifact": overlay.metadata.get("artifact"),
+                "started_at": started_at,
+                "updated_at": finished_at,
+                "metrics": {
+                    "elapsed_seconds": round(perf_counter() - started, 3),
+                    "parse_seconds": parse_seconds,
+                    "publish_seconds": publish_seconds,
+                    "feature_count": len(overlay.features),
+                    "chunk_count": chunk_count,
+                },
+            }
+            self._catalog.upsert_overlay_job(result)
+            return result
+        except Exception as error:
+            failed_at = utc_now().isoformat()
+            self._catalog.upsert_overlay_job(
+                {
+                    "job_id": job_id,
+                    "slide_id": slide_id,
+                    "overlay_id": overlay_id,
+                    "version_id": version_id,
+                    "filename": filename,
+                    "source_format": source_format,
+                    "status": "failed",
+                    "stage": "failed",
+                    "progress_percent": 100.0,
+                    "message": str(error),
+                    "started_at": started_at,
+                    "updated_at": failed_at,
+                    "metrics": {"elapsed_seconds": round(perf_counter() - started, 3)},
+                }
+            )
+            raise
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    def list_jobs(self) -> list[dict[str, object]]:
+        return self._catalog.list_overlay_jobs()
+
+    def get_job(self, job_id: str) -> dict[str, object]:
+        return self._catalog.get_overlay_job(job_id)
+
 
 class ReviewApplicationService:
     def __init__(
@@ -236,10 +393,14 @@ class ReviewApplicationService:
         layers: AnnotationLayerRepository,
         annotations: AnnotationRepository,
         comments: CommentRepository,
+        tags: TagRepository,
+        reviews: ReviewRepository,
     ) -> None:
         self._layers = layers
         self._annotations = annotations
         self._comments = comments
+        self._tags = tags
+        self._reviews = reviews
 
     def list_layers(self, slide_id: str) -> list[dict[str, object]]:
         return [
@@ -395,3 +556,48 @@ class ReviewApplicationService:
 
     def delete_comment(self, slide_id: str, annotation_id: str, comment_id: str) -> None:
         self._comments.delete(SlideId(slide_id), AnnotationId(annotation_id), comment_id)
+
+    def list_tags(self, slide_id: str) -> list[dict[str, object]]:
+        return [{"value": tag.value, "color": tag.color} for tag in self._tags.list_for_slide(SlideId(slide_id))]
+
+    def replace_tags(self, slide_id: str, tags: list[dict[str, object]]) -> list[dict[str, object]]:
+        persisted = self._tags.replace_for_slide(
+            SlideId(slide_id),
+            [SlideTag(slide_id=SlideId(slide_id), value=str(tag["value"]), color=str(tag.get("color", "#38bdf8"))) for tag in tags],
+        )
+        return [{"value": tag.value, "color": tag.color} for tag in persisted]
+
+    def list_reviews(self, slide_id: str, annotation_id: str) -> list[dict[str, object]]:
+        return [
+            {
+                "id": review.review_id,
+                "annotationId": review.annotation_id.value,
+                "status": review.status,
+                "reviewer": review.reviewer,
+                "note": review.note,
+                "createdAt": review.created_at.isoformat().replace("+00:00", "Z"),
+                "updatedAt": review.updated_at.isoformat().replace("+00:00", "Z"),
+            }
+            for review in self._reviews.list_for_annotation(SlideId(slide_id), AnnotationId(annotation_id))
+        ]
+
+    def save_review(self, slide_id: str, annotation_id: str, *, review_id: str | None, status: str, reviewer: str, note: str) -> dict[str, object]:
+        persisted = self._reviews.save(
+            AnnotationReview(
+                review_id=review_id or f"review-{uuid4().hex[:12]}",
+                slide_id=SlideId(slide_id),
+                annotation_id=AnnotationId(annotation_id),
+                status=status,
+                reviewer=reviewer,
+                note=note,
+            )
+        )
+        return {
+            "id": persisted.review_id,
+            "annotationId": persisted.annotation_id.value,
+            "status": persisted.status,
+            "reviewer": persisted.reviewer,
+            "note": persisted.note,
+            "createdAt": persisted.created_at.isoformat().replace("+00:00", "Z"),
+            "updatedAt": persisted.updated_at.isoformat().replace("+00:00", "Z"),
+        }

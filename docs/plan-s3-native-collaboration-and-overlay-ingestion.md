@@ -14,6 +14,28 @@ The system must continue to run with only S3-compatible storage such as S3 or Mi
 
 This plan keeps the existing WSI ingest and deck.gl viewer path, adds a dedicated overlay ingestion pipeline for vector and tiled-score overlays, introduces collaborative presence, and adds topbar-accessible operations pages for slide and overlay uploads plus ingestion monitoring.
 
+## OVSI Inclusion
+
+This plan explicitly includes the custom overlay streaming runtime format defined earlier in the project context:
+
+- `OVSI` = `Overlay Vector Spatial Index`
+- extension: `.ovsi`
+- MIME: `application/vnd.ovsi`
+
+Related format family:
+
+- `OVSIP`: package or directory form, extension `.ovsip`
+- `OVSIM`: manifest component
+- `OVSII`: standalone index component
+- `OVSIB`: block component
+- `OVSIS`: style preset component
+
+Implementation rule:
+
+- upload formats may be `GeoJSON`, `GeoParquet`, `tile-grid JSON`, and later direct `.ovsi`
+- the canonical high-performance delivery format becomes `OVSI` or `OVSIP`
+- viewer streaming should target OVSI semantics even when the original upload format was not OVSI
+
 ## Current Gap
 
 The current repo already provides:
@@ -32,6 +54,7 @@ The missing capabilities are:
   - GeoJSON
   - GeoParquet
   - JSON tile-grid payloads like the provided `full_result.json`
+- native OVSI runtime delivery and future OVSI import compatibility
 - a streaming overlay artifact format with LOD, clustering, class/score metadata, and chunked loading
 - operations pages for slide upload/monitoring and overlay upload/monitoring
 - a storage model that treats S3-compatible object storage as the system of record for durable state
@@ -104,6 +127,7 @@ Owns:
 - overlay chunking/planning
 - overlay LOD summaries
 - clustering artifacts
+- OVSI or OVSIP artifact generation
 - overlay manifest publication
 
 Input formats:
@@ -111,10 +135,13 @@ Input formats:
 - `geojson`
 - `geoparquet`
 - `tile-grid-json`
+- optional future `ovsi`
 
 Derived artifact outputs:
 
 - overlay manifest
+- `.ovsi` single-file delivery artifact for smaller immutable overlays
+- `.ovsip/` package delivery artifact for very large overlays or partial regeneration
 - per-layer summaries
 - class legend
 - chunk index
@@ -182,9 +209,11 @@ s3://app-root/
   derived/
     wsi/v1/{slideId}/{versionId}/...
     overlays/v1/{slideId}/{overlaySetId}/{versionId}/manifest.json
-    overlays/v1/{slideId}/{overlaySetId}/{versionId}/index.bin
-    overlays/v1/{slideId}/{overlaySetId}/{versionId}/chunks/{chunkId}.bin
-    overlays/v1/{slideId}/{overlaySetId}/{versionId}/clusters/{clusterId}.bin
+    overlays/v1/{slideId}/{overlaySetId}/{versionId}/overlay.ovsi
+    overlays/v1/{slideId}/{overlaySetId}/{versionId}/overlay.ovsip/manifest.ovsim
+    overlays/v1/{slideId}/{overlaySetId}/{versionId}/overlay.ovsip/index.ovsii
+    overlays/v1/{slideId}/{overlaySetId}/{versionId}/overlay.ovsip/blocks/{blockId}.ovsib
+    overlays/v1/{slideId}/{overlaySetId}/{versionId}/overlay.ovsip/styles/default.ovsis
   audit/
     events/{yyyy}/{mm}/{dd}/...
 ```
@@ -201,7 +230,7 @@ Rules:
 
 ### Overlay manifest
 
-Introduce `overlay-manifest-v1`:
+Introduce `overlay-manifest-v1` as the stable API contract that describes either a single `.ovsi` object or an `.ovsip` package:
 
 ```json
 {
@@ -215,6 +244,13 @@ Introduce `overlay-manifest-v1`:
     "unit": "level-0-pixel"
   },
   "sourceFormat": "tile-grid-json",
+  "runtimeFormat": "ovsi",
+  "artifact": {
+    "layout": "package",
+    "ovsiPath": null,
+    "manifestPath": ".../overlay.ovsip/manifest.ovsim",
+    "indexPath": ".../overlay.ovsip/index.ovsii"
+  },
   "grid": {
     "level": 16,
     "tileWidth": 224,
@@ -236,8 +272,8 @@ Introduce `overlay-manifest-v1`:
   "lods": [
     {
       "level": 0,
-      "chunkIndexPath": ".../lods/0/index.bin",
-      "clusterIndexPath": ".../lods/0/clusters.bin"
+      "blockIndexPath": ".../lods/0/index.ovsii",
+      "clusterIndexPath": ".../lods/0/clusters.ovsii"
     }
   ],
   "summary": {
@@ -247,6 +283,151 @@ Introduce `overlay-manifest-v1`:
   }
 }
 ```
+
+### OVSI runtime specification
+
+OVSI is query-oriented, not merely tile-oriented. It is a multi-resolution spatial compute package that lets the viewer decide before loading geometry:
+
+- what blocks intersect the viewport
+- what labels or classes are present
+- what score ranges are present
+- how many features are inside candidate blocks
+- whether density, cluster, centroid, simplified, or raw representation is appropriate
+- which byte ranges or package blocks to fetch
+
+Required OVSI capabilities for this plan:
+
+- WSI pixel-coordinate native
+- immutable and CDN-friendly
+- HTTP range readable for single-file `.ovsi`
+- footer-indexed with compact critical indexes
+- spatially indexed
+- block-compressed
+- LOD-aware
+- cluster-aware
+- dictionary-encoded labels
+- score-range summaries
+- hot and cold attribute split
+- deck.gl-ready binary payloads where practical
+- adaptive rendering planner
+
+### OVSI representation hierarchy
+
+The runtime should support these representation families:
+
+- `density`
+- `cluster`
+- `centroid`
+- `point`
+- `bbox`
+- `polygon`
+- `label`
+- `heatmap`
+- `selected-feature-detail`
+
+Recommended MVP LOD ladder:
+
+- `LOD 0`: density grid
+- `LOD 1`: clusters
+- `LOD 2`: centroids
+- `LOD 3`: simplified polygons
+- `LOD 4`: raw polygons
+
+### OVSI block model
+
+OVSI should be block-based rather than purely tile-based. A block summary must be rich enough to support fast planning:
+
+```json
+{
+  "blockId": 88122,
+  "level": 9,
+  "bounds": [20480, 40960, 22528, 43008],
+  "featureCount": 42183,
+  "labelHistogram": {
+    "1": 8200,
+    "2": 1291,
+    "3": 32692
+  },
+  "scoreRange": [0.12, 0.99],
+  "rawGeometryOffset": 882019120,
+  "rawGeometryLength": 391122,
+  "clusterOffset": 81920300,
+  "clusterLength": 12210
+}
+```
+
+The package form may replace offsets with block paths.
+
+### OVSI package layouts
+
+Supported artifact layouts:
+
+1. Single-file:
+
+```text
+case_123_slide_A.nuclei_segmentation_v3.3f91ab.ovsi
+```
+
+2. Package form:
+
+```text
+case_123_slide_A.nuclei_segmentation_v3.ovsip/
+  manifest.ovsim
+  index.ovsii
+  blocks/
+    000001.ovsib
+    000002.ovsib
+  styles/
+    default.ovsis
+```
+
+Recommended usage:
+
+- single `.ovsi` for smaller immutable overlays and simplest CDN delivery
+- `.ovsip` for very large overlays, parallel upload, or partial regeneration
+
+### OVSI browser query flow
+
+The viewer-side loader contract should follow this sequence:
+
+1. fetch file footer or package manifest and index
+2. determine viewport bounds
+3. determine desired LOD from zoom
+4. query intersecting blocks
+5. reject blocks by active filters using summaries only
+6. choose density, cluster, or raw representation
+7. fetch blocks or byte ranges
+8. decode hot columns first
+9. push buffers to deck.gl
+10. load cold attributes lazily on hover or selection
+
+Planned loader shape:
+
+```ts
+const overlay = await OVSI.open(urlOrManifest);
+
+const plan = await overlay.plan({
+  bounds: [x0, y0, x1, y1],
+  zoom,
+  labels: [1, 3],
+  scoreMin: 0.75,
+  maxFeatures: 100_000,
+  deviceBudget: "medium",
+  mode: "auto"
+});
+
+const batches = await overlay.load(plan);
+```
+
+The loader should support:
+
+- HTTP range fetch
+- request coalescing
+- `AbortController`
+- LRU block cache
+- decode workers
+- GPU buffer reuse
+- progressive rendering
 
 ### Chunk format families
 
@@ -262,6 +443,8 @@ Supported families:
   - cluster block bounds
   - aggregate stats
   - preview geometry
+
+These chunk families map naturally onto OVSI blocks or OVSIB package blocks.
 
 ### Viewer contract
 
@@ -337,6 +520,13 @@ Result:
   - GeoJSON
   - GeoParquet
   - tile-grid JSON
+- documented OVSI runtime specification:
+  - `.ovsi`
+  - `.ovsip`
+  - `.ovsim`
+  - `.ovsii`
+  - `.ovsib`
+  - `.ovsis`
 - provenance and class/score semantics documented
 
 Timing:
@@ -354,6 +544,8 @@ Tests:
 - contract golden tests
 - normalization tests for each source format
 - sample `full_result.json` adapter fixture test
+- OVSI manifest and index golden tests
+- single-file `.ovsi` and package `.ovsip` compatibility tests
 
 Playbook:
 
@@ -373,6 +565,7 @@ Result:
   - derive class legend
   - build chunk indexes
   - build cluster summaries
+  - emit `.ovsi` or `.ovsip`
   - publish overlay manifest last
 
 Timing:
@@ -385,6 +578,7 @@ Metrics:
 - worker RSS `< 2.5 GB` for representative overlays
 - no published manifest on failed overlay ingest
 - sparse tile-grid overlays preserve score fidelity `100%` against source fixture
+- OVSI planner metadata preserves block label and score summaries `100%` against derived source summaries
 
 Tests:
 
@@ -393,6 +587,8 @@ Tests:
 - malformed chunk rejection test
 - golden manifest/index/chunk tests
 - score-grid roundtrip test using attached JSON fixture
+- `.ovsi` byte-range lookup test
+- `.ovsip` block loading test
 
 Playbook:
 
@@ -405,7 +601,7 @@ Playbook:
 Result:
 
 - overlay list/detail endpoints backed by overlay manifests rather than static JSON
-- chunk fetch endpoints or direct derived object access
+- chunk fetch endpoints or direct OVSI or OVSIP derived object access
 - viewer overlay client with viewport-aware chunk planner
 - low-zoom cluster rendering, high-zoom raw feature/cell rendering
 
@@ -427,6 +623,8 @@ Tests:
 - tile-grid score rendering tests
 - class legend/style binding tests
 - chunk cache eviction tests
+- OVSI range-read planning tests
+- OVSIP block coalescing tests
 
 Playbook:
 
@@ -671,6 +869,28 @@ Overlay operations route:
   - preserve grid semantics
   - chunk sparse coordinates and score arrays by viewport-relevant block
   - derive cluster summaries for low zoom
+- `OVSI`
+  - validate manifest, index, and block integrity
+  - register directly when contract version matches
+  - optionally repackage between single-file and package delivery forms if policy requires it
+
+### OVSI hosting requirements
+
+For `.ovsi` on S3 or MinIO:
+
+- `Accept-Ranges: bytes`
+- `Cache-Control: public, max-age=31536000, immutable`
+- `Content-Type: application/vnd.ovsi`
+- avoid whole-file gzip compression
+- keep the footer small
+- keep critical indexes compact
+- coalesce adjacent range reads
+
+Recommended starting block targets:
+
+- spatial block size: `2048 x 2048` WSI pixels at full resolution
+- target compressed block size: `64 KB - 512 KB`
+- max raw features per block: `50k - 200k`
 
 ### Object-store repositories
 
@@ -733,7 +953,7 @@ Use websocket hub with:
 Add or update:
 
 - `ADR-002`: S3-compatible storage as the durable system of record
-- `ADR-003`: overlay-manifest-v1 and chunked overlay delivery
+- `ADR-003`: OVSI overlay runtime format and chunked overlay delivery
 - `ADR-004`: collaboration presence split between durable review state and ephemeral websocket state
 - `ADR-005`: operations workspace routes and monitoring model
 

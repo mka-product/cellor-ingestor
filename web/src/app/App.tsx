@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Viewer } from "../components/Viewer";
+import { OverlaysOperationsPage } from "../components/operations/OverlaysOperationsPage";
+import { SlidesOperationsPage } from "../components/operations/SlidesOperationsPage";
 import type { CatalogSlide } from "../domain/catalog";
 import type { ViewerManifest } from "../domain/contracts";
 import { fetchSlides, fetchManifestContent } from "../infrastructure/catalogClient";
 
 export function App() {
+  const [route, setRoute] = useState(() => window.location.pathname || "/");
   const [slides, setSlides] = useState<CatalogSlide[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [manifest, setManifest] = useState<ViewerManifest | null>(null);
@@ -20,6 +23,15 @@ export function App() {
   );
 
   const selectedSlideLabel = selectedSlide?.display_name ?? "";
+  const isViewerRoute = !route.startsWith("/operations/");
+  const isSlideOpsRoute = route === "/operations/slides";
+  const isOverlayOpsRoute = route === "/operations/overlays";
+
+  useEffect(() => {
+    const onPopState = () => setRoute(window.location.pathname || "/");
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,6 +54,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!isViewerRoute) return;
     if (!selectedKey) return;
     const controller = new AbortController();
     const [slideId, versionId] = selectedKey.split(":");
@@ -55,7 +68,7 @@ export function App() {
       if (!controller.signal.aborted) setStatus("error");
     });
     return () => controller.abort();
-  }, [selectedKey]);
+  }, [isViewerRoute, selectedKey]);
 
   const filteredSlides = useMemo(() => {
     const query = (pickerOpen && searchValue === selectedSlideLabel ? "" : searchValue).trim().toLowerCase();
@@ -97,69 +110,88 @@ export function App() {
           <h1 className="workspace-logo">Cellor Workspace</h1>
           <p className="workspace-panel__subtle">{selectedSlide?.display_name ?? "No slide selected"}</p>
         </div>
-        <div ref={pickerRef} className="workspace-slide-picker">
-          <input
-            className="workspace-search"
-            type="search"
-            placeholder="Search slides"
-            value={searchValue}
-            onFocus={() => {
-              setPickerOpen(true);
-              if (searchValue === selectedSlideLabel) {
-                setSearchValue("");
-              }
-            }}
-            onClick={() => {
-              setPickerOpen(true);
-              if (searchValue === selectedSlideLabel) {
-                setSearchValue("");
-              }
-            }}
-            onChange={(event) => {
-              setSearchValue(event.target.value);
-              setPickerOpen(true);
-            }}
-          />
-          {pickerOpen ? (
-            <div className="workspace-slide-picker__menu">
-              {filteredSlides.length === 0 ? <div className="workspace-empty">No matching slides.</div> : null}
-              {filteredSlides.map((slide) => {
-                const optionKey = `${slide.slide_id}:${slide.version_id}`;
-                const isActive = optionKey === selectedKey;
-                return (
-                  <button
-                    key={optionKey}
-                    type="button"
-                    className={`workspace-slide-picker__option${isActive ? " is-active" : ""}`}
-                    onClick={() => {
-                      setSelectedKey(optionKey);
-                      setSearchValue(slide.display_name);
-                      setPickerOpen(false);
-                    }}
-                  >
-                    {slide.thumbnail_path ? (
-                      <img
-                        className="workspace-slide-picker__thumb"
-                        src={slide.thumbnail_path}
-                        alt={`${slide.display_name} thumbnail`}
-                      />
-                    ) : (
-                      <div className="workspace-slide-picker__thumb workspace-slide-picker__thumb--empty" />
-                    )}
-                    <div className="workspace-slide-picker__copy">
-                      <strong>{slide.display_name}</strong>
-                      <span>{slide.slide_id}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-        <div className="workspace-launcher" />
+        {isViewerRoute ? (
+          <div ref={pickerRef} className="workspace-slide-picker">
+            <input
+              className="workspace-search"
+              type="search"
+              placeholder="Search slides"
+              value={searchValue}
+              onFocus={() => {
+                setPickerOpen(true);
+                if (searchValue === selectedSlideLabel) {
+                  setSearchValue("");
+                }
+              }}
+              onClick={() => {
+                setPickerOpen(true);
+                if (searchValue === selectedSlideLabel) {
+                  setSearchValue("");
+                }
+              }}
+              onChange={(event) => {
+                setSearchValue(event.target.value);
+                setPickerOpen(true);
+              }}
+            />
+            {pickerOpen ? (
+              <div className="workspace-slide-picker__menu">
+                {filteredSlides.length === 0 ? <div className="workspace-empty">No matching slides.</div> : null}
+                {filteredSlides.map((slide) => {
+                  const optionKey = `${slide.slide_id}:${slide.version_id}`;
+                  const isActive = optionKey === selectedKey;
+                  return (
+                    <button
+                      key={optionKey}
+                      type="button"
+                      className={`workspace-slide-picker__option${isActive ? " is-active" : ""}`}
+                      onClick={() => {
+                        setSelectedKey(optionKey);
+                        setSearchValue(slide.display_name);
+                        setPickerOpen(false);
+                        if (!isViewerRoute) return;
+                      }}
+                    >
+                      {slide.thumbnail_path ? (
+                        <img
+                          className="workspace-slide-picker__thumb"
+                          src={slide.thumbnail_path}
+                          alt={`${slide.display_name} thumbnail`}
+                        />
+                      ) : (
+                        <div className="workspace-slide-picker__thumb workspace-slide-picker__thumb--empty" />
+                      )}
+                      <div className="workspace-slide-picker__copy">
+                        <strong>{slide.display_name}</strong>
+                        <span>{slide.slide_id}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : <div className="workspace-slide-picker" />}
+        <nav className="workspace-launcher">
+          <button type="button" className={`workspace-nav${isViewerRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/"); setRoute("/"); }}>
+            Viewer
+          </button>
+          <button type="button" className={`workspace-nav${isSlideOpsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/operations/slides"); setRoute("/operations/slides"); }}>
+            Slides
+          </button>
+          <button type="button" className={`workspace-nav${isOverlayOpsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/operations/overlays"); setRoute("/operations/overlays"); }}>
+            Overlays
+          </button>
+        </nav>
       </header>
-      {slides.length === 0 ? <div className="workspace-empty" style={{ padding: 24 }}>No ingested slides found.</div> : null}
-      {manifest ? <Viewer manifest={manifest} /> : null}
+      {isViewerRoute ? (
+        <>
+          {slides.length === 0 ? <div className="workspace-empty" style={{ padding: 24 }}>No ingested slides found.</div> : null}
+          {manifest ? <Viewer manifest={manifest} /> : null}
+        </>
+      ) : null}
+      {isSlideOpsRoute ? <SlidesOperationsPage /> : null}
+      {isOverlayOpsRoute ? <OverlaysOperationsPage /> : null}
     </main>
   );
 }

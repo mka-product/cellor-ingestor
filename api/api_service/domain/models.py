@@ -153,6 +153,9 @@ class OverlayDefinition:
     kind: str
     features: tuple[OverlayFeature, ...]
     legend: tuple[dict[str, Any], ...] = ()
+    source_format: str = "manual"
+    version_id: str = "v1"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -185,5 +188,24 @@ class AnnotationComment:
     body: str
     author: str
     parent_comment_id: CommentId | None = None
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True)
+class SlideTag:
+    slide_id: SlideId
+    value: str
+    color: str = "#38bdf8"
+
+
+@dataclass(frozen=True)
+class AnnotationReview:
+    review_id: str
+    slide_id: SlideId
+    annotation_id: AnnotationId
+    status: str
+    reviewer: str
+    note: str = ""
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)

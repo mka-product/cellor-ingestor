@@ -259,11 +259,15 @@ class IngestionApplicationService:
         self._tissue_mask_size = tissue_mask_size
         self._progress_sink = progress_sink
         self._job_id: str | None = None
+        self._cancel_checker = None
 
     def bind_job(self, job_id: str, reader_backend: str | None = None) -> None:
         self._job_id = job_id
         if reader_backend is not None:
             self._reader_backend = reader_backend
+
+    def set_cancel_checker(self, cancel_checker) -> None:
+        self._cancel_checker = cancel_checker
 
     def ingest(self, request: IngestionRequest) -> ManifestPublication:
         self._events.publish(ingestion_started(request.slide_id, request.version_id))
@@ -700,3 +704,5 @@ class IngestionApplicationService:
             file=sys.stderr,
             flush=True,
         )
+        if self._cancel_checker is not None and self._cancel_checker():
+            raise RuntimeError("ingestion cancelled")

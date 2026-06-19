@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from time import perf_counter
 
-from worker.worker_service.domain.models import IngestionRequest
+from worker.worker_service.domain.models import IngestionRequest, utc_now
 from worker.worker_service.infrastructure.bootstrap import Container
 from worker.worker_service.infrastructure.storage import MinioArtifactStore
 
@@ -67,6 +67,7 @@ def main() -> None:
     if isinstance(container.store, MinioArtifactStore):
         container.store.upload_file(raw_object_path, original_path)
     started = perf_counter()
+    started_at = utc_now().isoformat()
     container.registry.upsert_job(
         {
             "job_id": job_id,
@@ -74,11 +75,13 @@ def main() -> None:
             "version_id": args.version_id,
             "status": "running",
             "reader_backend": args.reader_backend,
+            "metadata_backend": args.metadata_backend,
             "progress_percent": 1.0,
             "stage": "starting",
             "message": "Worker bootstrapped",
-            "started_at": None,
-            "updated_at": None,
+            "started_at": started_at,
+            "updated_at": started_at,
+            "metrics": {},
         }
     )
     print(
@@ -132,11 +135,21 @@ def main() -> None:
             "version_id": publication.version_id,
             "status": "succeeded",
             "reader_backend": args.reader_backend,
+            "metadata_backend": args.metadata_backend,
             "progress_percent": 100.0,
             "stage": "published",
             "message": "Manifest published",
-            "started_at": publication.published_at.isoformat(),
+            "started_at": started_at,
             "updated_at": publication.published_at.isoformat(),
+            "metrics": {
+                "elapsed_seconds": round(elapsed_seconds, 3),
+                "level_count": publication.level_count,
+                "tile_count": publication.tile_count,
+                "non_empty_tile_count": publication.non_empty_tile_count,
+                "group_count": publication.group_count,
+                "artifact_bytes": publication.artifact_bytes,
+                "timings": publication.timings,
+            },
         }
     )
     print(

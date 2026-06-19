@@ -63,8 +63,8 @@ export function visibleSlideWindow(
   const halfHeight = viewerSize.height / (2 * scale);
   const left = Math.max(0, viewState.target[0] - halfWidth);
   const right = Math.min(manifest.width, viewState.target[0] + halfWidth);
-  const worldBottom = Math.max(0, viewState.target[1] - halfHeight);
-  const worldTop = Math.min(manifest.height, viewState.target[1] + halfHeight);
+  const worldTop = Math.max(0, viewState.target[1] - halfHeight);
+  const worldBottom = Math.min(manifest.height, viewState.target[1] + halfHeight);
   return {
     left,
     right,

@@ -1,4 +1,4 @@
-import type { AnnotationFeature, AnnotationLayer } from "../../domain/workspace";
+import type { AnnotationFeature, AnnotationLayer, AnnotationReview } from "../../domain/workspace";
 import { FloatingPanelFrame } from "./FloatingPanelFrame";
 
 type Props = {
@@ -12,6 +12,8 @@ type Props = {
   onToggleComments: () => void;
   onDelete: () => void;
   onChange: (payload: { label: string; color: string; opacity: number; lineWidth: number }) => void;
+  review: AnnotationReview | null;
+  onSaveReview: (payload: { status: string; reviewer: string; note: string }) => void;
   commentCount: number;
 };
 
@@ -100,6 +102,37 @@ export function AnnotationEditPanel(props: Props) {
                 color: String(style.color ?? "#f97316"),
                 opacity: Number(style.opacity ?? 0.25),
                 lineWidth: Number(event.target.value)
+              })
+            }
+          />
+        </label>
+        <label>
+          Review status
+          <select
+            value={props.review?.status ?? "pending"}
+            onChange={(event) =>
+              props.onSaveReview({
+                status: event.target.value,
+                reviewer: props.review?.reviewer ?? "local-user",
+                note: props.review?.note ?? ""
+              })
+            }
+          >
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="changes-requested">Changes requested</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </label>
+        <label>
+          Review note
+          <textarea
+            defaultValue={props.review?.note ?? ""}
+            onBlur={(event) =>
+              props.onSaveReview({
+                status: props.review?.status ?? "pending",
+                reviewer: props.review?.reviewer ?? "local-user",
+                note: event.target.value
               })
             }
           />

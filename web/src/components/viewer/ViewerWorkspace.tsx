@@ -6,9 +6,11 @@ import type {
   AnnotationFeature,
   AnnotationLayer,
   AnnotationPersistenceError,
+  AnnotationReview,
   OverlayClassStyle,
   OverlayFeature,
   OverlaySource,
+  SlideTag,
   ViewerWorkspaceState
 } from "../../domain/workspace";
 import {
@@ -19,13 +21,17 @@ import {
   fetchAnnotationLayers,
   fetchAnnotations,
   fetchComments,
-  fetchOverlayDetail,
   fetchOverlaySources,
+  fetchReviews,
+  fetchTags,
   saveAnnotation,
   saveAnnotationLayer,
+  saveReview,
+  saveTags,
   updateComment,
   WorkspaceRequestError
 } from "../../infrastructure/workspaceClient";
+import { resolveWebSocketUrl } from "../../infrastructure/apiBase";
 import { AnnotationEditPanel } from "./AnnotationEditPanel";
 import { CommentsPanel } from "./CommentsPanel";
 import { FloatingPanelFrame } from "./FloatingPanelFrame";
@@ -36,6 +42,8 @@ import { ViewerCanvas } from "./ViewerCanvas";
 import { ViewerToolbar } from "./ViewerToolbar";
 import { WorkspaceShortcuts } from "./WorkspaceShortcuts";
 import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
+import type { OverlayWindow } from "../../viewer/overlayManifest";
+import { useOverlayRuntime } from "../../viewer/useOverlayRuntime";
 
 type Props = {
   manifest: ViewerManifest;
@@ -68,12 +76,6 @@ const INITIAL_LAYOUT: PanelLayout = {
   shortcuts: { x: 780, y: 380, zIndex: 36 }
 };
 
-function deriveKind(type: unknown): OverlayFeature["kind"] {
-  if (type === "Point" || type === "MultiPoint") return "point";
-  if (type === "LineString" || type === "MultiLineString") return "polyline";
-  return "polygon";
-}
-
 function styleKey(feature: OverlayFeature) {
   return String(feature.properties.class ?? feature.properties.label ?? "default");
 }
@@ -100,25 +102,51 @@ export function ViewerWorkspace({ manifest }: Props) {
   const [panelLayout, setPanelLayout] = useState(INITIAL_LAYOUT);
   const [tool, setTool] = useState("view");
   const [overlaySources, setOverlaySources] = useState<OverlaySource[]>([]);
-  const [rawOverlayFeatures, setRawOverlayFeatures] = useState<OverlayFeature[]>([]);
   const [overlayStyles, setOverlayStyles] = useState<Record<string, OverlayClassStyle>>({});
   const [annotationLayers, setAnnotationLayers] = useState<AnnotationLayer[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationFeature[]>([]);
   const [comments, setComments] = useState<AnnotationComment[]>([]);
+  const [reviews, setReviews] = useState<AnnotationReview[]>([]);
+  const [tags, setTags] = useState<SlideTag[]>([]);
   const [viewportStats, setViewportStats] = useState({ level: 0, visibleTiles: 0, totalVisibleReferences: 0 });
   const [annotationOperation, setAnnotationOperation] = useState<AnnotationBooleanMode>("create");
   const [operationModifier, setOperationModifier] = useState<AnnotationBooleanMode | null>(null);
   const [annotationSaveError, setAnnotationSaveError] = useState<AnnotationPersistenceError | null>(null);
+  const [presenceEnabled, setPresenceEnabled] = useState(false);
+  const [presenceStatus, setPresenceStatus] = useState<"off" | "connecting" | "connected" | "unavailable">("off");
+  const [remotePresence, setRemotePresence] = useState<
+    Array<{
+      userId: string;
+      x: number;
+      y: number;
+      zoom: number;
+      slideX?: number;
+      slideY?: number;
+      viewport?: OverlayWindow;
+      centerX?: number;
+      centerY?: number;
+    }>
+  >([]);
+  const [overlayVisibleWindow, setOverlayVisibleWindow] = useState<OverlayWindow | null>(null);
+  const localPresenceId = useMemo(() => `user-${Math.random().toString(36).slice(2, 8)}`, []);
+  const presenceSocketRef = useRef<WebSocket | null>(null);
+  const { overlayManifest, overlayFeatures: rawOverlayFeatures, runtimeStats } = useOverlayRuntime(
+    manifest.slideId,
+    workspace.selectedOverlayId,
+    overlayVisibleWindow
+  );
 
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
-      const [nextSources, nextLayers, nextAnnotations] = await Promise.all([
-        fetchOverlaySources(manifest.slideId, controller.signal),
-        fetchAnnotationLayers(manifest.slideId, controller.signal),
-        fetchAnnotations(manifest.slideId, controller.signal)
+      const [nextSources, nextLayers, nextAnnotations, nextTags] = await Promise.all([
+        fetchOverlaySources(manifest.slideId, controller.signal).catch(() => []),
+        fetchAnnotationLayers(manifest.slideId, controller.signal).catch(() => []),
+        fetchAnnotations(manifest.slideId, controller.signal).catch(() => []),
+        fetchTags(manifest.slideId, controller.signal).catch(() => [])
       ]);
       setOverlaySources(nextSources);
+      setTags(nextTags);
       if (nextLayers.length === 0) {
         const layer = await saveAnnotationLayer(manifest.slideId, {
           name: "Review Layer",
@@ -138,33 +166,24 @@ export function ViewerWorkspace({ manifest }: Props) {
   }, [manifest.slideId]);
 
   useEffect(() => {
-    if (!workspace.selectedOverlayId) {
-      setRawOverlayFeatures([]);
-      return;
-    }
-    const controller = new AbortController();
-    fetchOverlayDetail(manifest.slideId, workspace.selectedOverlayId, controller.signal)
-      .then((payload) =>
-        setRawOverlayFeatures(
-          payload.features.map((feature) => ({
-            ...feature,
-            kind: deriveKind(feature.geometry.type)
-          }))
-        )
-      )
-      .catch(() => setRawOverlayFeatures([]));
-    return () => controller.abort();
-  }, [manifest.slideId, workspace.selectedOverlayId]);
-
-  useEffect(() => {
     if (!workspace.selectedAnnotationId) {
       setComments([]);
+      setReviews([]);
       return;
     }
     const controller = new AbortController();
-    fetchComments(manifest.slideId, workspace.selectedAnnotationId, controller.signal)
-      .then(setComments)
-      .catch(() => setComments([]));
+    Promise.all([
+      fetchComments(manifest.slideId, workspace.selectedAnnotationId, controller.signal),
+      fetchReviews(manifest.slideId, workspace.selectedAnnotationId, controller.signal)
+    ])
+      .then(([nextComments, nextReviews]) => {
+        setComments(nextComments);
+        setReviews(nextReviews);
+      })
+      .catch(() => {
+        setComments([]);
+        setReviews([]);
+      });
     return () => controller.abort();
   }, [manifest.slideId, workspace.selectedAnnotationId]);
 
@@ -233,6 +252,76 @@ export function ViewerWorkspace({ manifest }: Props) {
       window.removeEventListener("blur", resetModifier);
     };
   }, []);
+
+  useEffect(() => {
+    if (!presenceEnabled) {
+      presenceSocketRef.current?.close();
+      presenceSocketRef.current = null;
+      setRemotePresence([]);
+      setPresenceStatus("off");
+      return;
+    }
+    setPresenceStatus("connecting");
+    const socket = new WebSocket(resolveWebSocketUrl(`/slides/${manifest.slideId}/presence`));
+    presenceSocketRef.current = socket;
+    socket.onopen = () => {
+      if (presenceSocketRef.current === socket) {
+        setPresenceStatus("connected");
+      }
+    };
+    socket.onerror = () => {
+      if (presenceSocketRef.current === socket) {
+        setPresenceStatus("unavailable");
+      }
+    };
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as {
+          type: string;
+          userId?: string;
+          x?: number;
+          y?: number;
+          zoom?: number;
+          slideX?: number;
+          slideY?: number;
+          viewport?: OverlayWindow;
+          centerX?: number;
+          centerY?: number;
+        };
+        if (payload.type !== "presence.cursor" || !payload.userId || payload.userId === localPresenceId) return;
+        setRemotePresence((current) => {
+          const next = current.filter((entry) => entry.userId !== payload.userId);
+          next.push({
+            userId: payload.userId,
+            x: payload.x ?? 0.5,
+            y: payload.y ?? 0.5,
+            zoom: payload.zoom ?? 0,
+            slideX: payload.slideX,
+            slideY: payload.slideY,
+            viewport: payload.viewport,
+            centerX: payload.centerX,
+            centerY: payload.centerY
+          });
+          return next;
+        });
+      } catch {
+        return;
+      }
+    };
+    socket.onclose = () => {
+      if (presenceSocketRef.current === socket) {
+        presenceSocketRef.current = null;
+        setPresenceStatus((current) => (current === "connected" || current === "connecting" ? "unavailable" : current));
+      }
+    };
+    return () => {
+      socket.close();
+      if (presenceSocketRef.current === socket) {
+        presenceSocketRef.current = null;
+      }
+      setRemotePresence([]);
+    };
+  }, [localPresenceId, manifest.slideId, presenceEnabled]);
 
   const effectiveAnnotationOperation = operationModifier ?? annotationOperation;
 
@@ -362,6 +451,7 @@ export function ViewerWorkspace({ manifest }: Props) {
   }, [flushPersistQueue]);
 
   const selectedLayer = annotationLayers.find((layer) => layer.id === workspace.activeLayerId) ?? annotationLayers[0] ?? null;
+  const selectedReview = reviews[reviews.length - 1] ?? null;
 
   const createLayer = async () => {
     const layer = await saveAnnotationLayer(manifest.slideId, {
@@ -405,6 +495,7 @@ export function ViewerWorkspace({ manifest }: Props) {
         onToggleOverlays={() => setWorkspace((current) => ({ ...current, showOverlays: !current.showOverlays }))}
         onToggleAnnotations={() => setWorkspace((current) => ({ ...current, showAnnotations: !current.showAnnotations }))}
         onToggleHelp={() => setWorkspace((current) => ({ ...current, showHelp: !current.showHelp }))}
+        onTogglePresence={() => setPresenceEnabled((current) => !current)}
         onToggleFullscreen={() => {
           setWorkspace((current) => ({ ...current, isFullscreen: !current.isFullscreen }));
           void toggleFullscreen(workspaceRef.current);
@@ -414,6 +505,8 @@ export function ViewerWorkspace({ manifest }: Props) {
         annotationsOpen={workspace.showAnnotations}
         helpOpen={workspace.showHelp}
         fullscreen={workspace.isFullscreen}
+        presenceEnabled={presenceEnabled}
+        presenceStatus={presenceStatus}
         tool={tool}
         onToolChange={setTool}
         annotationOperation={annotationOperation}
@@ -437,16 +530,26 @@ export function ViewerWorkspace({ manifest }: Props) {
         onSelectOverlay={handleSelectOverlay}
         onSelectAnnotation={handleSelectAnnotation}
         onPersistAnnotations={persistAnnotations}
+        remotePresence={remotePresence}
+        onPresenceUpdate={(payload) => {
+          if (!presenceEnabled) return;
+          const socket = presenceSocketRef.current;
+          if (!socket || socket.readyState !== WebSocket.OPEN) return;
+          socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, ...payload }));
+        }}
         onViewportStatsChange={setViewportStats}
+        onVisibleWindowChange={setOverlayVisibleWindow}
       />
       {workspace.showMetadata ? (
         <MetadataPanel
           manifest={manifest}
+          tags={tags}
           position={panelLayout.metadata}
           zIndex={panelLayout.metadata.zIndex}
           onPositionChange={(position) => updatePanelPosition("metadata", position)}
           onBringToFront={() => bumpPanel("metadata")}
           onClose={() => setWorkspace((current) => ({ ...current, showMetadata: false }))}
+          onSaveTags={(nextTags) => void saveTags(manifest.slideId, nextTags).then(setTags)}
         />
       ) : null}
       {workspace.showAnnotations ? (
@@ -502,7 +605,11 @@ export function ViewerWorkspace({ manifest }: Props) {
           title="Overlays"
           position={panelLayout.overlays}
           zIndex={panelLayout.overlays.zIndex}
-          subtitle={selectedOverlay ? `${selectedOverlay.featureCount} features` : "Select an overlay to render."}
+          subtitle={
+            selectedOverlay
+              ? `${selectedOverlay.featureCount} features · ${runtimeStats.mode} · ${runtimeStats.runtimeFormat || "unknown"}`
+              : "Select an overlay to render."
+          }
           onPositionChange={(position) => updatePanelPosition("overlays", position)}
           onBringToFront={() => bumpPanel("overlays")}
           onClose={() => setWorkspace((current) => ({ ...current, showOverlays: false, selectedOverlayId: null }))}
@@ -520,6 +627,12 @@ export function ViewerWorkspace({ manifest }: Props) {
           }
         >
           <div className="workspace-list">
+            {selectedOverlay ? (
+              <div className="workspace-panel__subtle" style={{ padding: "0 0 12px" }}>
+                Visible chunks {runtimeStats.visibleChunkCount} · Cache {runtimeStats.cacheSize} · In flight {runtimeStats.inflightChunkCount} · Loaded features {runtimeStats.loadedFeatureCount}
+                {overlayManifest?.artifact && Object.keys(overlayManifest.artifact).length > 0 ? ` · ${String(overlayManifest.artifact.layout ?? "artifact")}` : ""}
+              </div>
+            ) : null}
             {overlaySources.length === 0 ? <div className="workspace-empty">No overlay exposures registered.</div> : null}
             {overlaySources.map((overlay) => (
               <button
@@ -596,6 +709,16 @@ export function ViewerWorkspace({ manifest }: Props) {
             );
             void persistAnnotations(next);
           }}
+          review={selectedReview}
+          onSaveReview={(payload) =>
+            saveReview(manifest.slideId, selectedAnnotation.id, payload).then((review) =>
+              setReviews((current) => {
+                const next = current.filter((item) => item.id !== review.id);
+                next.push(review);
+                return next;
+              })
+            )
+          }
           commentCount={comments.length}
         />
       ) : null}

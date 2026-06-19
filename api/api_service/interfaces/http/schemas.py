@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class InitiateUploadRequest(BaseModel):
@@ -37,11 +37,15 @@ class IngestionJobResponse(BaseModel):
     slide_id: str
     version_id: str
     status: str
+    display_name: Optional[str] = None
     reader_backend: Optional[str] = None
     metadata_backend: Optional[str] = None
     progress_percent: Optional[float] = None
     stage: Optional[str] = None
     message: Optional[str] = None
+    started_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    metrics: dict[str, object] = Field(default_factory=dict)
 
 
 class SlideResponse(BaseModel):
@@ -90,6 +94,7 @@ class JobProgressResponse(BaseModel):
     slide_id: str
     version_id: str
     status: str
+    display_name: str
     reader_backend: str
     metadata_backend: str
     progress_percent: float
@@ -97,6 +102,7 @@ class JobProgressResponse(BaseModel):
     message: Optional[str] = None
     started_at: Optional[str] = None
     updated_at: Optional[str] = None
+    metrics: dict[str, object] = Field(default_factory=dict)
 
 
 class OverlaySummaryResponse(BaseModel):
@@ -121,8 +127,95 @@ class OverlayDetailResponse(BaseModel):
     id: str
     name: str
     kind: str
+    sourceFormat: Optional[str] = None
+    versionId: Optional[str] = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    delivery: dict[str, object] = Field(default_factory=dict)
     features: list[OverlayFeatureResponse]
     legend: list[dict[str, object]] = Field(default_factory=list)
+
+
+class OverlayChunkSummaryResponse(BaseModel):
+    id: str
+    bounds: list[float] = Field(default_factory=list)
+    featureCount: int
+    path: str
+
+
+class OverlayManifestResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_name: str = Field(alias="schema")
+    slideId: str
+    overlayId: str
+    name: str
+    kind: str
+    versionId: str
+    sourceFormat: str
+    coordinateSpace: dict[str, object] = Field(default_factory=dict)
+    runtimeFormat: str
+    artifact: dict[str, object] = Field(default_factory=dict)
+    featureCount: int
+    bounds: list[float] = Field(default_factory=list)
+    legend: list[dict[str, object]] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    chunking: dict[str, object] = Field(default_factory=dict)
+
+
+class OverlayChunkResponse(BaseModel):
+    id: str
+    bounds: list[float] = Field(default_factory=list)
+    featureCount: int
+    features: list[OverlayFeatureResponse] = Field(default_factory=list)
+
+
+class OverlayUploadResponse(BaseModel):
+    job_id: str
+    slide_id: str
+    overlay_id: str
+    version_id: str
+    filename: str
+    name: str
+    source_format: str
+    status: str
+    stage: str
+    progress_percent: float
+    message: Optional[str] = None
+    feature_count: int = 0
+    kind: Optional[str] = None
+    checksum: Optional[str] = None
+    runtime_format: Optional[str] = None
+    started_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    metrics: dict[str, object] = Field(default_factory=dict)
+    artifact: dict[str, object] = Field(default_factory=dict)
+
+
+class SlideTagRequest(BaseModel):
+    value: str = Field(min_length=1)
+    color: str = Field(default="#38bdf8", min_length=4)
+
+
+class SlideTagResponse(BaseModel):
+    value: str
+    color: str
+
+
+class AnnotationReviewRequest(BaseModel):
+    id: Optional[str] = None
+    status: str = Field(min_length=1)
+    reviewer: str = Field(default="local-user", min_length=1)
+    note: str = ""
+
+
+class AnnotationReviewResponse(BaseModel):
+    id: str
+    annotationId: str
+    status: str
+    reviewer: str
+    note: str
+    createdAt: str
+    updatedAt: str
 
 
 class AnnotationLayerRequest(BaseModel):

@@ -10,6 +10,7 @@ import {
   MinusSquare,
   MousePointer2,
   PenLine,
+  Radar,
   RotateCcw,
   SquarePlus,
   SquaresUnite,
@@ -26,11 +27,14 @@ type Props = {
   onToggleAnnotations: () => void;
   onToggleHelp: () => void;
   onToggleFullscreen: () => void;
+  onTogglePresence: () => void;
   metadataOpen: boolean;
   overlaysOpen: boolean;
   annotationsOpen: boolean;
   helpOpen: boolean;
   fullscreen: boolean;
+  presenceEnabled: boolean;
+  presenceStatus: "off" | "connecting" | "connected" | "unavailable";
   tool: string;
   onToolChange: (tool: string) => void;
   annotationOperation: AnnotationBooleanMode;
@@ -70,10 +74,20 @@ const PANEL_ACTIONS = [
   { id: "metadata", title: "Metadata", icon: Info },
   { id: "overlays", title: "Overlays", icon: Layers3 },
   { id: "annotations", title: "Annotations", icon: MessageSquarePlus },
+  { id: "presence", title: "Share Cursor", icon: Radar },
   { id: "help", title: "Shortcuts", icon: CircleHelp }
 ];
 
 export function ViewerToolbar(props: Props) {
+  const presenceLabel =
+    props.presenceStatus === "connecting"
+      ? "Presence connecting"
+      : props.presenceStatus === "connected"
+        ? "Presence connected"
+        : props.presenceStatus === "unavailable"
+          ? "Presence unavailable"
+          : "Presence off";
+
   const renderActionButton = (
     action: { id: string; title: string; icon: typeof ZoomOut },
     className = "workspace-toolbar__button"
@@ -86,6 +100,8 @@ export function ViewerToolbar(props: Props) {
           ? props.overlaysOpen
           : action.id === "annotations"
             ? props.annotationsOpen
+            : action.id === "presence"
+              ? props.presenceEnabled
             : action.id === "help"
               ? props.helpOpen
               : props.fullscreen;
@@ -102,9 +118,11 @@ export function ViewerToolbar(props: Props) {
                 ? props.onToggleOverlays
                 : action.id === "annotations"
                   ? props.onToggleAnnotations
-                  : action.id === "help"
-                    ? props.onToggleHelp
-                    : props.onToggleFullscreen;
+                  : action.id === "presence"
+                    ? props.onTogglePresence
+                    : action.id === "help"
+                      ? props.onToggleHelp
+                      : props.onToggleFullscreen;
 
     return (
       <button
@@ -112,8 +130,8 @@ export function ViewerToolbar(props: Props) {
         type="button"
         className={`${className}${isActive ? " is-active" : ""}`}
         onClick={onClick}
-        title={action.title}
-        aria-label={action.title}
+        title={action.id === "presence" ? `${action.title} · ${presenceLabel}` : action.title}
+        aria-label={action.id === "presence" ? `${action.title} · ${presenceLabel}` : action.title}
       >
         <Icon className="workspace-toolbar__icon" strokeWidth={1.8} />
       </button>
@@ -170,6 +188,10 @@ export function ViewerToolbar(props: Props) {
         <div className="workspace-toolbar__divider" />
         <div className="workspace-toolbar__section" aria-label="Panels">
           {PANEL_ACTIONS.map((action) => renderActionButton(action))}
+          <div className={`workspace-presence-indicator is-${props.presenceStatus}`} aria-live="polite">
+            <span className="workspace-presence-indicator__dot" />
+            <span>{presenceLabel}</span>
+          </div>
         </div>
       </div>
       <div className="workspace-toolbar workspace-toolbar--bottom-right">

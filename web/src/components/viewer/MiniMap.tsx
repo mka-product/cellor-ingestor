@@ -6,11 +6,12 @@ type Props = {
   width: number;
   height: number;
   rect: { left: number; top: number; width: number; height: number };
+  remoteRects?: Array<{ left: number; top: number; width: number; height: number; userId: string }>;
   onMoveToPoint: (normalizedX: number, normalizedY: number) => void;
   onDragDelta: (deltaX: number, deltaY: number) => void;
 };
 
-export function MiniMap({ slideId, thumbnailPath, width, height, rect, onMoveToPoint, onDragDelta }: Props) {
+export function MiniMap({ slideId, thumbnailPath, width, height, rect, remoteRects = [], onMoveToPoint, onDragDelta }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
 
@@ -64,6 +65,23 @@ export function MiniMap({ slideId, thumbnailPath, width, height, rect, onMoveToP
       }}
     >
       <img alt={`${slideId} minimap`} src={thumbnailPath} style={{ display: "block", width: "100%", height: "100%" }} />
+      {remoteRects.map((remote) => (
+        <div
+          key={remote.userId}
+          title={`${remote.userId} viewport`}
+          style={{
+            position: "absolute",
+            left: remote.left,
+            top: remote.top,
+            width: Math.max(6, remote.width),
+            height: Math.max(6, remote.height),
+            border: "1px solid rgba(248, 113, 113, 0.95)",
+            background: "rgba(248,113,113,0.08)",
+            boxSizing: "border-box",
+            pointerEvents: "none"
+          }}
+        />
+      ))}
       <div
         style={{
           position: "absolute",
