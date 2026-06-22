@@ -9,7 +9,7 @@ import type {
   OverlaySource,
   SlideTag
 } from "../domain/workspace";
-import { resolveApiUrl } from "./apiBase";
+import { resolveApiAssetUrl, resolveApiUrl } from "./apiBase";
 
 export class WorkspaceRequestError extends Error {
   status: number;
@@ -79,13 +79,15 @@ export async function fetchOverlayChunk(
   slideId: string,
   overlayId: string,
   chunkId: string,
+  representation?: "raw" | "simplified" | "cluster",
   signal?: AbortSignal
 ): Promise<OverlayChunk> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}/chunks/${chunkId}`), { signal }));
+  const query = representation ? `?representation=${representation}` : "";
+  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}/chunks/${chunkId}${query}`), { signal }));
 }
 
 export async function fetchOverlayChunkAtPath(chunkPath: string, signal?: AbortSignal): Promise<OverlayChunk> {
-  return parseJson(fetch(chunkPath, { signal }));
+  return parseJson(fetch(resolveApiAssetUrl(chunkPath), { signal }));
 }
 
 export async function fetchAnnotationLayers(slideId: string, signal?: AbortSignal): Promise<AnnotationLayer[]> {

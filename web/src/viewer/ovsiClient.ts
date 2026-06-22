@@ -5,7 +5,7 @@ Invariants: manifest fetch and chunk fetch are separated so planning and cache p
 Failure modes: missing manifests or chunks surface as rejected promises to the caller.
 */
 
-import type { OverlayChunk, OverlayManifest } from "../domain/workspace";
+import type { OverlayChunk, OverlayChunkSummary, OverlayManifest } from "../domain/workspace";
 import { fetchOverlayManifest } from "../infrastructure/workspaceClient";
 import { loadOverlayChunk } from "./ovsiLoader";
 
@@ -16,7 +16,7 @@ export async function openOverlayRuntime(slideId: string, overlayId: string, sig
 export async function loadOverlayRuntimeChunk(
   slideId: string,
   overlayId: string,
-  chunk: { id: string; path: string }
+  chunk: OverlayChunkSummary
 ): Promise<OverlayChunk> {
   return loadOverlayChunk(slideId, overlayId, chunk);
 }

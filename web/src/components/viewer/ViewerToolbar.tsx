@@ -40,6 +40,7 @@ type Props = {
   annotationOperation: AnnotationBooleanMode;
   effectiveAnnotationOperation: AnnotationBooleanMode;
   onAnnotationOperationChange: (operation: AnnotationBooleanMode) => void;
+  minimapBottom: number;
 };
 
 const TOOLS = [
@@ -70,8 +71,11 @@ const VIEW_ACTIONS: Array<{
   { id: "fullscreen", title: "Fullscreen", icon: Maximize2 }
 ];
 
-const PANEL_ACTIONS = [
-  { id: "metadata", title: "Metadata", icon: Info },
+const LEFT_PANEL_ACTIONS = [
+  { id: "metadata", title: "Metadata", icon: Info }
+];
+
+const RIGHT_PANEL_ACTIONS = [
   { id: "overlays", title: "Overlays", icon: Layers3 },
   { id: "annotations", title: "Annotations", icon: MessageSquarePlus },
   { id: "presence", title: "Share Cursor", icon: Radar },
@@ -79,14 +83,21 @@ const PANEL_ACTIONS = [
 ];
 
 export function ViewerToolbar(props: Props) {
-  const presenceLabel =
+  const presenceStatusLabel =
     props.presenceStatus === "connecting"
-      ? "Presence connecting"
+      ? "Connecting…"
       : props.presenceStatus === "connected"
-        ? "Presence connected"
+        ? "Sharing active"
         : props.presenceStatus === "unavailable"
-          ? "Presence unavailable"
-          : "Presence off";
+          ? "Sharing unavailable"
+          : "Share cursor";
+
+  const presenceDotColor =
+    props.presenceStatus === "connected"
+      ? "#22c55e"   // green-500
+      : props.presenceStatus === "connecting"
+        ? "#f59e0b" // amber-400
+        : "#ef4444"; // red-500 — off or unavailable
 
   const renderActionButton = (
     action: { id: string; title: string; icon: typeof ZoomOut },
@@ -124,14 +135,43 @@ export function ViewerToolbar(props: Props) {
                       ? props.onToggleHelp
                       : props.onToggleFullscreen;
 
+    if (action.id === "presence") {
+      return (
+        <button
+          key={action.id}
+          type="button"
+          className={`${className}${isActive ? " is-active" : ""}`}
+          style={{ position: "relative" }}
+          onClick={onClick}
+          title={`${action.title} · ${presenceStatusLabel}`}
+          aria-label={`${action.title} · ${presenceStatusLabel}`}
+        >
+          <Icon className="workspace-toolbar__icon" strokeWidth={1.8} />
+          <span
+            style={{
+              position: "absolute",
+              top: 5,
+              right: 5,
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: presenceDotColor,
+              border: "1.5px solid rgba(0,0,0,0.35)",
+              pointerEvents: "none"
+            }}
+          />
+        </button>
+      );
+    }
+
     return (
       <button
         key={action.id}
         type="button"
         className={`${className}${isActive ? " is-active" : ""}`}
         onClick={onClick}
-        title={action.id === "presence" ? `${action.title} · ${presenceLabel}` : action.title}
-        aria-label={action.id === "presence" ? `${action.title} · ${presenceLabel}` : action.title}
+        title={action.title}
+        aria-label={action.title}
       >
         <Icon className="workspace-toolbar__icon" strokeWidth={1.8} />
       </button>
@@ -187,11 +227,16 @@ export function ViewerToolbar(props: Props) {
         </div>
         <div className="workspace-toolbar__divider" />
         <div className="workspace-toolbar__section" aria-label="Panels">
-          {PANEL_ACTIONS.map((action) => renderActionButton(action))}
-          <div className={`workspace-presence-indicator is-${props.presenceStatus}`} aria-live="polite">
-            <span className="workspace-presence-indicator__dot" />
-            <span>{presenceLabel}</span>
-          </div>
+          {LEFT_PANEL_ACTIONS.map((action) => renderActionButton(action))}
+        </div>
+      </div>
+      <div
+        className="workspace-toolbar"
+        style={{ right: 16, top: props.minimapBottom + 8 }}
+        aria-label="Panel toggles"
+      >
+        <div className="workspace-toolbar__section">
+          {RIGHT_PANEL_ACTIONS.map((action) => renderActionButton(action))}
         </div>
       </div>
       <div className="workspace-toolbar workspace-toolbar--bottom-right">

@@ -55,20 +55,35 @@ export function AnnotationEditPanel(props: Props) {
             }
           />
         </label>
-        <label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--celnight-text-secondary)", fontSize: "var(--celnight-text-sm)" }}>
           Color
-          <input
-            type="color"
-            defaultValue={String(style.color ?? "#f97316")}
-            onChange={(event) =>
-              props.onChange({
-                label: String(props.annotation.properties.label ?? ""),
-                color: event.target.value,
-                opacity: Number(style.opacity ?? 0.25),
-                lineWidth: Number(style.lineWidth ?? 2)
-              })
-            }
-          />
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <span
+              style={{
+                display: "inline-block",
+                width: 28,
+                height: 28,
+                borderRadius: 4,
+                background: String(style.color ?? "#f97316"),
+                border: "1px solid rgba(0,0,0,0.25)",
+                cursor: "pointer"
+              }}
+            />
+            <input
+              type="color"
+              value={String(style.color ?? "#f97316")}
+              onChange={(event) =>
+                props.onChange({
+                  label: String(props.annotation.properties.label ?? ""),
+                  color: event.target.value,
+                  opacity: Number(style.opacity ?? 0.25),
+                  lineWidth: Number(style.lineWidth ?? 2)
+                })
+              }
+              style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%", padding: 0, border: "none" }}
+            />
+          </span>
+          <code style={{ fontSize: 11, opacity: 0.7 }}>{String(style.color ?? "#f97316")}</code>
         </label>
         <label>
           Opacity

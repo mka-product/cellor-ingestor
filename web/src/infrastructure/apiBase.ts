@@ -5,7 +5,14 @@ Invariants: returned URLs are absolute when required by browser APIs such as Web
 Failure modes: malformed environment URLs fall back to safe same-origin defaults instead of crashing component render.
 */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+function defaultApiBase(): string {
+  if (typeof window !== "undefined" && window.location.port === "5173") {
+    return "http://localhost:8000";
+  }
+  return "";
+}
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? defaultApiBase();
 
 export function apiBasePath(): string {
   return API_BASE.replace(/\/$/, "");
@@ -26,6 +33,14 @@ export function resolveApiOrigin(): string | null {
     return new URL(apiBasePath(), window.location.origin).origin;
   } catch {
     return null;
+  }
+}
+
+export function resolveApiAssetUrl(path: string): string {
+  try {
+    return new URL(path, resolveApiOrigin() ?? window.location.origin).toString();
+  } catch {
+    return path;
   }
 }
 

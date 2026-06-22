@@ -12,11 +12,13 @@ import {
   ModifyMode,
   ViewMode
 } from "@deck.gl-community/editable-layers";
+import type { EditAction } from "@deck.gl-community/editable-layers";
+import type { Feature, Geometry, GeoJsonProperties } from "geojson";
 import type { Matrix4 } from "@math.gl/core";
 import type { MutableRefObject } from "react";
 
 import type { AnnotationFeature, AnnotationLayer } from "../../domain/workspace";
-import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
+import type { AnnotationBooleanMode, AnnotationCanvasFeature } from "../../viewer/annotationBoolean";
 import { applyAnnotationBooleanOperation } from "../../viewer/annotationBoolean";
 import {
   isCancelAnnotationEdit,
@@ -25,8 +27,10 @@ import {
   shouldApplyBooleanOperation
 } from "../../viewer/annotationEditFlow";
 import { sanitizeAnnotationGeometry, sanitizeDraftFeature } from "../../viewer/annotationGeometry";
+import type { EditableGeoJsonFeatureCollection } from "./useBufferedFeatureCollection";
 
-type FeatureCollection = { type: "FeatureCollection"; features: Array<Record<string, unknown>> };
+type EditableFeature = Feature<Geometry, GeoJsonProperties>;
+type FeatureCollection = EditableGeoJsonFeatureCollection;
 
 class PixelAccurateDrawLineStringMode extends DrawLineStringMode {
   calculateInfoDraw(clickSequence: number[][]) {
@@ -70,9 +74,12 @@ function colorFromHex(
 }
 
 function sanitizeFeatureCollection(collection: FeatureCollection): FeatureCollection {
+  const sanitized = collection.features
+    .map((feature) => sanitizeDraftFeature(feature as unknown as Record<string, unknown>))
+    .filter(Boolean);
   return {
     ...collection,
-    features: collection.features.map((feature) => sanitizeDraftFeature(feature)).filter(Boolean) as Array<Record<string, unknown>>
+    features: sanitized as unknown as EditableFeature[]
   };
 }
 
@@ -146,7 +153,7 @@ export function createAnnotationEditorLayer(args: {
     modelMatrix,
     pickable: true,
     onClick: (info: { object?: { id?: string } }) => onSelectAnnotation((info.object?.id as string | null) ?? null),
-    onEdit: ({ updatedData, editType }: { updatedData: FeatureCollection; editType: string }) => {
+    onEdit: ({ updatedData, editType }: EditAction<FeatureCollection>) => {
       if (isTransientAnnotationEdit(editType)) {
         onTransientUpdate(updatedData);
         return;
@@ -160,16 +167,16 @@ export function createAnnotationEditorLayer(args: {
       const nextData =
         shouldApplyBooleanOperation(
           editType,
-          updatedData.features.length > 0 ? (updatedData.features[updatedData.features.length - 1] as Record<string, any>)?.geometry?.["type"] : null
+          updatedData.features.length > 0 ? (updatedData.features[updatedData.features.length - 1] as EditableFeature | undefined)?.geometry?.type ?? null : null
         )
           ? {
               ...updatedData,
               features: applyAnnotationBooleanOperation({
-                previousFeatures: annotationCollectionRef.current.features as any[],
-                updatedFeatures: updatedData.features as any[],
+                previousFeatures: annotationCollectionRef.current.features as unknown as AnnotationCanvasFeature[],
+                updatedFeatures: updatedData.features as unknown as AnnotationCanvasFeature[],
                 operation: annotationOperation,
                 activeLayerId
-              })
+              }) as unknown as EditableFeature[]
             }
           : updatedData;
 
@@ -181,26 +188,26 @@ export function createAnnotationEditorLayer(args: {
       }
 
       const targetLayerId = activeLayerId ?? visibleAnnotationLayers[0]?.id ?? "default-layer";
-      onPersistCommittedFeatures(
-        sanitizedData.features
-          .map((feature) => {
-            const geometry = sanitizeAnnotationGeometry((feature.geometry ?? {}) as Record<string, unknown>);
+      const persistedFeatures = sanitizedData.features
+        .map((feature) => {
+            const geometry = sanitizeAnnotationGeometry((feature.geometry ?? {}) as unknown as Record<string, unknown>);
             if (!geometry) return null;
+            const properties = (feature.properties ?? {}) as Record<string, unknown>;
             return {
               id: String(feature.id ?? crypto.randomUUID()),
-              layerId: String((feature.properties?.["layerId"] as string | undefined) ?? targetLayerId),
+              layerId: String((properties["layerId"] as string | undefined) ?? targetLayerId),
               geometry: {
                 type: geometry.type,
                 coordinates: worldCoordinatesToImage(geometry.coordinates)
               },
-              properties: (feature.properties as Record<string, unknown> | undefined) ?? {},
-              style: ((feature.properties as Record<string, unknown> | undefined)?.style as Record<string, unknown> | undefined) ?? {},
+              properties,
+              style: (properties.style as Record<string, unknown> | undefined) ?? {},
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
-            } satisfies AnnotationFeature;
+            } as AnnotationFeature;
           })
-          .filter((feature): feature is AnnotationFeature => feature !== null)
-      );
+        .filter(Boolean) as AnnotationFeature[];
+      onPersistCommittedFeatures(persistedFeatures);
     }
   });
 }

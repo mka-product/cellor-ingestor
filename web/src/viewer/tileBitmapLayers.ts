@@ -19,7 +19,7 @@ export function createBitmapLayers(
   tileImageLookup: (tileKey: string) => HTMLImageElement | undefined,
   modelMatrix: Matrix4
 ): BitmapLayer[] {
-  return renderLevels
+  const layers = renderLevels
     .flatMap((renderLevel) =>
       renderLevel.tiles.map((tile) => {
         const image = tileImageLookup(tile.key);
@@ -32,7 +32,6 @@ export function createBitmapLayers(
           modelMatrix
         });
       })
-    )
-    .filter((entry): entry is BitmapLayer => entry !== null);
+    );
+  return layers.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 }
-

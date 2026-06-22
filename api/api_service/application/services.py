@@ -12,8 +12,9 @@ from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 from api.api_service.application.review_validation import validate_annotation_geometry
-from api.api_service.application.overlay_artifacts import publish_overlay_artifacts
+from api.api_service.application.overlay_artifacts import publish_overlay_artifacts, publish_streaming_geoparquet_artifacts
 from api.api_service.application.overlay_delivery import build_overlay_manifest, load_overlay_chunk
 from api.api_service.application.overlay_ingestion import parse_overlay_source, to_overlay_definition
 from uuid import uuid4
@@ -49,6 +50,7 @@ from api.api_service.domain.models import (
     Checksum,
     CommentId,
     IngestionJob,
+    OverlayDefinition,
     OverlayId,
     SlideTag,
     Slide,
@@ -206,18 +208,20 @@ class CatalogQueryService:
 
 
 class OverlayQueryService:
-    def __init__(self, overlays: OverlayRepository) -> None:
+    def __init__(self, overlays: OverlayRepository, minio_proxy=None) -> None:
         self._overlays = overlays
+        self._minio_proxy = minio_proxy
 
     def list_overlays(self, slide_id: str) -> list[dict[str, object]]:
         payload: list[dict[str, object]] = []
         for overlay in self._overlays.list_for_slide(SlideId(slide_id)):
+            feature_count = int(overlay.metadata.get("featureCount", len(overlay.features)))
             payload.append(
                 {
                     "id": overlay.overlay_id.value,
                     "name": overlay.name,
                     "kind": overlay.kind,
-                    "featureCount": len(overlay.features),
+                    "featureCount": feature_count,
                     "legend": list(overlay.legend),
                 }
             )
@@ -227,17 +231,22 @@ class OverlayQueryService:
         overlay = self._overlays.get(SlideId(slide_id), OverlayId(overlay_id))
         if overlay is None:
             raise LookupError("overlay not found")
-        manifest = build_overlay_manifest(overlay)
+        manifest = self.get_overlay_manifest(slide_id, overlay_id)
+        metadata = {
+            key: value
+            for key, value in overlay.metadata.items()
+            if key not in {"deliveryManifest", "chunkPaths"}
+        }
         return {
             "id": overlay.overlay_id.value,
             "name": overlay.name,
             "kind": overlay.kind,
             "sourceFormat": overlay.source_format,
             "versionId": overlay.version_id,
-            "metadata": overlay.metadata,
+            "metadata": metadata,
             "delivery": {
                 "manifestPath": f"/slides/{overlay.slide_id.value}/overlays/{overlay.overlay_id.value}/manifest",
-                "detailMode": "inline",
+                "detailMode": "inline" if overlay.features else "chunked",
                 "chunkCount": len(manifest["chunking"]["chunks"]),
             },
             "features": [
@@ -259,12 +268,31 @@ class OverlayQueryService:
         overlay = self._overlays.get(SlideId(slide_id), OverlayId(overlay_id))
         if overlay is None:
             raise LookupError("overlay not found")
+        if isinstance(overlay.metadata.get("deliveryManifest"), dict):
+            return dict(overlay.metadata["deliveryManifest"])
         return build_overlay_manifest(overlay)
 
-    def get_overlay_chunk(self, slide_id: str, overlay_id: str, chunk_id: str) -> dict[str, object]:
+    def get_overlay_chunk(self, slide_id: str, overlay_id: str, chunk_id: str, representation: str | None = None) -> dict[str, object]:
         overlay = self._overlays.get(SlideId(slide_id), OverlayId(overlay_id))
         if overlay is None:
             raise LookupError("overlay not found")
+        if isinstance(overlay.metadata.get("deliveryManifest"), dict) and self._minio_proxy is not None:
+            chunks = overlay.metadata["deliveryManifest"].get("chunking", {}).get("chunks", [])
+            chunk = next((item for item in chunks if item.get("id") == chunk_id), None)
+            if isinstance(chunk, dict):
+                if representation and isinstance(chunk.get("representations"), dict):
+                    summary = chunk["representations"].get(representation)
+                    if isinstance(summary, dict) and isinstance(summary.get("path"), str):
+                        return self._minio_proxy.load_json(str(summary["path"]))
+                if isinstance(chunk.get("path"), str):
+                    return self._minio_proxy.load_json(str(chunk["path"]))
+        if not overlay.features:
+            if self._minio_proxy is None:
+                raise LookupError("overlay chunk not found")
+            chunk_paths = overlay.metadata.get("chunkPaths", {})
+            if not isinstance(chunk_paths, dict) or chunk_id not in chunk_paths:
+                raise LookupError("overlay chunk not found")
+            return self._minio_proxy.load_json(str(chunk_paths[chunk_id]))
         return load_overlay_chunk(overlay, chunk_id)
 
 
@@ -273,6 +301,77 @@ class OverlayIngestionApplicationService:
         self._overlays = overlays
         self._catalog = catalog
         self._minio_proxy = minio_proxy
+
+    def stage_upload(
+        self,
+        *,
+        slide_id: str,
+        filename: str,
+        source_format: str,
+        payload: bytes,
+        display_name: str | None = None,
+    ) -> dict[str, object]:
+        overlay_id = f"overlay-{uuid4().hex[:12]}"
+        version_id = f"v-{uuid4().hex[:12]}"
+        job_id = f"overlay-job-{uuid4().hex[:12]}"
+        checksum = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+        started_at = utc_now().isoformat()
+        object_path = f"s3://raw-overlays/{slide_id}/{overlay_id}/{filename}"
+        if self._minio_proxy is None:
+            raise RuntimeError("overlay staging requires object storage")
+        self._minio_proxy.put_bytes(object_path, payload, "application/octet-stream")
+        staged = {
+            "job_id": job_id,
+            "slide_id": slide_id,
+            "overlay_id": overlay_id,
+            "version_id": version_id,
+            "filename": filename,
+            "name": display_name or Path(filename).stem,
+            "source_format": source_format,
+            "status": "pending",
+            "stage": "queued",
+            "progress_percent": 0.0,
+            "message": "Awaiting overlay worker pickup",
+            "feature_count": 0,
+            "kind": None,
+            "checksum": checksum,
+            "runtime_format": None,
+            "started_at": started_at,
+            "updated_at": started_at,
+            "metrics": {},
+            "artifact": {},
+            "object_path": object_path,
+        }
+        self._catalog.upsert_overlay_job(staged)
+        return staged
+
+    def process_staged_upload(self, staged: dict[str, object]) -> dict[str, object]:
+        object_path = str(staged["object_path"])
+        if self._minio_proxy is None:
+            raise RuntimeError("overlay staging requires object storage")
+        payload, _ = self._minio_proxy.get_s3_bytes(object_path)
+        return self._ingest_payload(
+            slide_id=str(staged["slide_id"]),
+            overlay_id=str(staged["overlay_id"]),
+            version_id=str(staged["version_id"]),
+            job_id=str(staged["job_id"]),
+            filename=str(staged["filename"]),
+            source_format=str(staged["source_format"]),
+            payload=payload,
+            checksum=str(staged["checksum"]),
+            display_name=str(staged.get("name") or Path(str(staged["filename"])).stem),
+            started_at=str(staged["started_at"]),
+            progress_callback=lambda stage, progress, message: self._catalog.upsert_overlay_job(
+                {
+                    "job_id": str(staged["job_id"]),
+                    "status": "running",
+                    "stage": stage,
+                    "progress_percent": progress,
+                    "message": message,
+                    "updated_at": utc_now().isoformat(),
+                }
+            ),
+        )
 
     def ingest_upload(
         self,
@@ -288,6 +387,34 @@ class OverlayIngestionApplicationService:
         job_id = f"overlay-job-{uuid4().hex[:12]}"
         checksum = f"sha256:{hashlib.sha256(payload).hexdigest()}"
         started_at = utc_now().isoformat()
+        return self._ingest_payload(
+            slide_id=slide_id,
+            overlay_id=overlay_id,
+            version_id=version_id,
+            job_id=job_id,
+            filename=filename,
+            source_format=source_format,
+            payload=payload,
+            checksum=checksum,
+            display_name=display_name or Path(filename).stem,
+            started_at=started_at,
+        )
+
+    def _ingest_payload(
+        self,
+        *,
+        slide_id: str,
+        overlay_id: str,
+        version_id: str,
+        job_id: str,
+        filename: str,
+        source_format: str,
+        payload: bytes,
+        checksum: str,
+        display_name: str,
+        started_at: str,
+        progress_callback=None,
+    ) -> dict[str, object]:
         started = perf_counter()
         self._catalog.upsert_overlay_job(
             {
@@ -296,6 +423,7 @@ class OverlayIngestionApplicationService:
                 "overlay_id": overlay_id,
                 "version_id": version_id,
                 "filename": filename,
+                "name": display_name,
                 "source_format": source_format,
                 "status": "running",
                 "stage": "parsing",
@@ -311,22 +439,60 @@ class OverlayIngestionApplicationService:
             handle.write(payload)
             temp_path = Path(handle.name)
         try:
-            parse_started = perf_counter()
-            parsed = parse_overlay_source(temp_path, source_format, display_name or Path(filename).stem)
-            parse_seconds = round(perf_counter() - parse_started, 3)
-            overlay = to_overlay_definition(slide_id, overlay_id, version_id, parsed)
-            publish_seconds = 0.0
-            if self._minio_proxy is not None and source_format != "ovsi":
-                publish_started = perf_counter()
-                publication = publish_overlay_artifacts(self._minio_proxy, overlay)
-                publish_seconds = round(perf_counter() - publish_started, 3)
-                metadata = deepcopy(overlay.metadata)
-                metadata["runtimeFormat"] = publication.runtime_format
-                metadata["artifact"] = publication.artifact
-                metadata["chunkPaths"] = publication.chunk_paths
-                overlay = replace(overlay, metadata=metadata)
+            if source_format == "geoparquet" and self._minio_proxy is not None:
+                streamed = publish_streaming_geoparquet_artifacts(
+                    self._minio_proxy,
+                    slide_id=slide_id,
+                    overlay_id=overlay_id,
+                    version_id=version_id,
+                    overlay_name=display_name,
+                    source_format=source_format,
+                    source_path=temp_path,
+                    progress_callback=progress_callback,
+                )
+                parse_seconds = streamed.parse_elapsed_seconds
+                publish_seconds = streamed.publish_elapsed_seconds
+                metadata = {
+                    "runtimeFormat": streamed.publication.runtime_format,
+                    "artifact": streamed.publication.artifact,
+                    "chunkPaths": streamed.publication.chunk_paths,
+                    "featureCount": streamed.feature_count,
+                    "bounds": list(streamed.bounds),
+                    "deliveryManifest": streamed.publication.delivery_manifest or streamed.manifest,
+                }
+                overlay = OverlayDefinition(
+                    overlay_id=OverlayId(overlay_id),
+                    slide_id=SlideId(slide_id),
+                    name=display_name,
+                    kind="vector",
+                    features=(),
+                    legend=tuple(streamed.legend),
+                    source_format=source_format,
+                    version_id=version_id,
+                    metadata=metadata,
+                )
+                chunk_count = len(streamed.manifest["chunking"]["chunks"])
+                feature_count = streamed.feature_count
+            else:
+                parse_started = perf_counter()
+                parsed = parse_overlay_source(temp_path, source_format, display_name)
+                parse_seconds = round(perf_counter() - parse_started, 3)
+                overlay = to_overlay_definition(slide_id, overlay_id, version_id, parsed)
+                publish_seconds = 0.0
+                if self._minio_proxy is not None and source_format != "ovsi":
+                    publish_started = perf_counter()
+                    publication = publish_overlay_artifacts(self._minio_proxy, overlay)
+                    publish_seconds = round(perf_counter() - publish_started, 3)
+                    metadata = deepcopy(overlay.metadata)
+                    metadata["runtimeFormat"] = publication.runtime_format
+                    metadata["artifact"] = publication.artifact
+                    metadata["chunkPaths"] = publication.chunk_paths
+                    if publication.delivery_manifest is not None:
+                        metadata["deliveryManifest"] = publication.delivery_manifest
+                    overlay = replace(overlay, metadata=metadata)
+                chunk_count = len(build_overlay_manifest(overlay)["chunking"]["chunks"])
+                feature_count = len(overlay.features)
             finished_at = utc_now().isoformat()
-            chunk_count = len(build_overlay_manifest(overlay)["chunking"]["chunks"])
             self._overlays.save(overlay)
             result = {
                 "job_id": job_id,
@@ -339,8 +505,8 @@ class OverlayIngestionApplicationService:
                 "status": "succeeded",
                 "stage": "published",
                 "progress_percent": 100.0,
-                "message": f"Published {len(overlay.features)} features",
-                "feature_count": len(overlay.features),
+                "message": f"Published {feature_count} features",
+                "feature_count": feature_count,
                 "kind": overlay.kind,
                 "checksum": checksum,
                 "runtime_format": overlay.metadata.get("runtimeFormat"),
@@ -351,7 +517,7 @@ class OverlayIngestionApplicationService:
                     "elapsed_seconds": round(perf_counter() - started, 3),
                     "parse_seconds": parse_seconds,
                     "publish_seconds": publish_seconds,
-                    "feature_count": len(overlay.features),
+                    "feature_count": feature_count,
                     "chunk_count": chunk_count,
                 },
             }
@@ -366,6 +532,7 @@ class OverlayIngestionApplicationService:
                     "overlay_id": overlay_id,
                     "version_id": version_id,
                     "filename": filename,
+                    "name": display_name,
                     "source_format": source_format,
                     "status": "failed",
                     "stage": "failed",

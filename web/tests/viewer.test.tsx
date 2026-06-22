@@ -81,7 +81,7 @@ test("visible slide window preserves top-down coordinates in direct world mappin
     artifacts: { manifestPath: "/manifest", thumbnailPath: "/thumb" },
     provenance: { ingestionVersion: "0.1.0", sourceChecksum: "sha", publishedAt: "2026-06-16T00:00:00Z" }
   };
-  expect(visibleSlideWindow(manifest, { target: [500, 400, 0], zoom: 0 }, { width: 500, height: 400 }, 1)).toEqual({
+  expect(visibleSlideWindow(manifest, { target: [500, 400, 0], zoom: 0, rotationOrbit: 0 }, { width: 500, height: 400 }, 1)).toEqual({
     left: 250,
     right: 750,
     top: 600,

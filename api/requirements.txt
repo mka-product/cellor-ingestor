@@ -8,6 +8,7 @@ httpx==0.28.1
 jsonschema==4.25.0
 minio==7.2.8
 pyarrow==21.0.0
+duckdb==1.0.0
 shapely==2.1.1
 Pillow==11.3.0
 numpy==2.2.6

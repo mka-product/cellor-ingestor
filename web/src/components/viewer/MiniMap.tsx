@@ -51,11 +51,11 @@ export function MiniMap({ slideId, thumbnailPath, width, height, rect, remoteRec
       }}
       style={{
         position: "absolute",
-        left: 16,
+        right: 16,
         top: 16,
         width,
         height,
-        borderRadius: 10,
+        borderRadius: 0,
         overflow: "hidden",
         border: "1px solid rgba(255,255,255,0.35)",
         boxShadow: "0 12px 28px rgba(15,23,42,0.35)",

@@ -102,7 +102,7 @@ class Container:
 
     @property
     def overlay_service(self) -> OverlayQueryService:
-        return OverlayQueryService(self.overlays)
+        return OverlayQueryService(self.overlays, self.minio_proxy)
 
     @property
     def overlay_ingestion_service(self) -> OverlayIngestionApplicationService:

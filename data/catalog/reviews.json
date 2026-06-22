@@ -1,619 +1,2123 @@
 {
   "slides": {
-    "cmu-1-ndpi": {
+    "slide-ee56df86f549": {
       "layers": [
         {
-          "id": "layer-b31824701baa",
+          "id": "layer-02b79e4b195e",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-78df573f184f",
+          "id": "layer-5795844dfb4b",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-637d1c6640cb",
+          "id": "layer-a3ece7f5a720",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-e949704925ea",
+          "id": "layer-25909827e828",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-9379399e9ebb",
+          "id": "layer-06d37b381ef5",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-d221d02530bf",
+          "id": "layer-432fd932be41",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-98e34f4a54f2",
+          "id": "layer-94c6c5b8a57b",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-1a248d48393b",
+          "id": "layer-436b4c31caab",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-f493e5ba2006",
+          "id": "layer-798b469721fa",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-5207ee916c27",
+          "id": "layer-5d502cec8373",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-09a137eb8465",
+          "id": "layer-8a2ef9d52ea4",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-c0820474fcc4",
+          "id": "layer-c832c506c2b6",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-0e8045f8c5d5",
+          "id": "layer-2b4d4a04d170",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-248d13e4246f",
+          "id": "layer-e7a375924be3",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-49950653ef63",
+          "id": "layer-c1469f61e6fe",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-eff13d01a122",
+          "id": "layer-65a86d69a38c",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-662d8e1d34f6",
+          "id": "layer-788e9591a7ef",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-1fb5bbf4ea32",
+          "id": "layer-c5a31c44320b",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-6f8d9e822521",
+          "id": "layer-868b50592023",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-1ade50a8afcb",
+          "id": "layer-84d743f95589",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-d2a14e7012cb",
+          "id": "layer-03a3416142b7",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-75b4b1925c6d",
+          "id": "layer-a7144727cb90",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-c0392354b358",
+          "id": "layer-06edb9d76000",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-ebd1fb68eb75",
+          "id": "layer-39de83673e1a",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-47c7e85d96ba",
+          "id": "layer-bcc62266f413",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-e7d76df2c341",
+          "id": "layer-890a21ffa51f",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-cc7c606ccd0d",
+          "id": "layer-e0d268a622e0",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-0300c64cf61d",
+          "id": "layer-58f564753466",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-23a50f45cc7f",
+          "id": "layer-af66d032bb9f",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-4501cbf03eb2",
+          "id": "layer-e9979be838bd",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-54dbe60520a7",
+          "id": "layer-b91896446cf8",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-4e820282b65b",
+          "id": "layer-806d482dbadd",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-0694e1f1be30",
+          "id": "layer-bc75a6387293",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-22df3890b50a",
+          "id": "layer-0dcb47148109",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-ec5400ec03f3",
+          "id": "layer-cf7ec3b19575",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-149929af8f7f",
+          "id": "layer-578d445eba6d",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-fbd787f6b1ea",
+          "id": "layer-3f7bb193bb13",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-0355c6ec5879",
+          "id": "layer-286f593fc595",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-2423fa5dcd83",
+          "id": "layer-0207b621f260",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-a23e326b3a55",
+          "id": "layer-5b23ca984dd8",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-99907753282c",
+          "id": "layer-cee42f5cdc7e",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-b8065b292a49",
+          "id": "layer-6f81b9dd4500",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-1c3fbdd709e1",
-          "name": "Review Layer",
-          "color": "#f97316",
-          "isVisible": true,
-          "isLocked": false
-        }
-      ],
-      "annotations": [
-        {
-          "id": "0cbf9dd9-cf89-4bd2-9733-0946f28e1714",
-          "layerId": "layer-b31824701baa",
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [
-                  38395.44599745871,
-                  17090.00283003411
-                ],
-                [
-                  37643.44119809258,
-                  15338.092802906616
-                ],
-                [
-                  34711.908513341805,
-                  8508.639706868045
-                ],
-                [
-                  22934.282083862767,
-                  16023.392724329853
-                ],
-                [
-                  38395.44599745871,
-                  17090.00283003411
-                ]
-              ]
-            ]
-          },
-          "properties": {
-            "style": {},
-            "layerId": "layer-b31824701baa"
-          },
-          "style": {},
-          "createdAt": "2026-06-17T08:51:12.056844Z",
-          "updatedAt": "2026-06-18T09:10:10.830278Z"
-        },
-        {
-          "id": "cf829001-4088-4c2e-9e24-8d70bd405995",
-          "layerId": "layer-b31824701baa",
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [
-                  38395.44599745871,
-                  17090.00283003411
-                ],
-                [
-                  34711.908513341805,
-                  8508.639706868045
-                ],
-                [
-                  22934.282083862767,
-                  16023.392724329853
-                ],
-                [
-                  38395.44599745871,
-                  17090.00283003411
-                ]
-              ]
-            ]
-          },
-          "properties": {
-            "style": {
-              "color": "#eec768",
-              "opacity": 0.7,
-              "lineWidth": 7
-            },
-            "layerId": "layer-b31824701baa"
-          },
-          "style": {
-            "color": "#5aa3ed",
-            "opacity": 0.05,
-            "lineWidth": 7
-          },
-          "createdAt": "2026-06-17T08:51:13.736278Z",
-          "updatedAt": "2026-06-18T16:44:38.506150Z"
-        },
-        {
-          "id": "a0ac3d3f-7897-4038-a169-9d4fab4db120",
-          "layerId": "layer-b31824701baa",
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [
-                  37235.056546997876,
-                  10426.680111695368
-                ],
-                [
-                  39582.06738726012,
-                  10657.753161020628
-                ],
-                [
-                  38645.575377106215,
-                  12321.479116162489
-                ],
-                [
-                  36518.23550218871,
-                  13569.273582518885
-                ],
-                [
-                  32240.43249284373,
-                  8624.310326958352
-                ],
-                [
-                  37235.056546997876,
-                  10426.680111695368
-                ]
-              ]
-            ]
-          },
-          "properties": {},
-          "style": {},
-          "createdAt": "2026-06-18T16:00:46.372609Z",
-          "updatedAt": "2026-06-18T16:00:46.382225Z"
-        }
-      ],
-      "comments": [
-        {
-          "id": "comment-a0945236b185",
-          "annotationId": "0cbf9dd9-cf89-4bd2-9733-0946f28e1714",
-          "body": "test",
-          "author": "local-user",
-          "createdAt": "2026-06-17T08:51:28.137609Z"
-        },
-        {
-          "id": "comment-7b562852c07f",
-          "annotationId": "0cbf9dd9-cf89-4bd2-9733-0946f28e1714",
-          "body": "test",
-          "author": "local-user",
-          "createdAt": "2026-06-17T08:51:32.357402Z"
-        }
-      ]
-    },
-    "cmu-1-svs": {
-      "layers": [
-        {
-          "id": "layer-6d8d1a142d6a",
-          "name": "Reveiw layer",
-          "color": "#f97316",
-          "isVisible": true,
-          "isLocked": false
-        },
-        {
-          "id": "layer-9fef0d3f2220",
+          "id": "layer-0786ad1ce717",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-f4d23e4e755f",
+          "id": "layer-0fc9694368aa",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-49856dbef630",
+          "id": "layer-fcd0763ba40b",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-d5e3f24cc980",
-          "name": "Review Layer",
-          "color": "#f97316",
-          "isVisible": true,
-          "isLocked": false
-        }
-      ],
-      "annotations": [
-        {
-          "id": "d2969198-8c0a-4393-9990-75de6eb0757c",
-          "layerId": "layer-6d8d1a142d6a",
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [
-                  7065.526934355321,
-                  13621.150575645202
-                ],
-                [
-                  15466.032940459332,
-                  13329.407700654401
-                ],
-                [
-                  10081.924843883016,
-                  18126.95720050316
-                ],
-                [
-                  7065.526934355321,
-                  13621.150575645202
-                ]
-              ]
-            ]
-          },
-          "properties": {
-            "style": {},
-            "layerId": "layer-6d8d1a142d6a"
-          },
-          "style": {},
-          "createdAt": "2026-06-18T11:10:30.559597Z",
-          "updatedAt": "2026-06-18T13:08:47.408625Z"
-        },
-        {
-          "id": "9f5430e8-9352-4ae5-9117-c6d61f7f769f",
-          "layerId": "layer-6d8d1a142d6a",
-          "geometry": {
-            "type": "LineString",
-            "coordinates": [
-              [
-                27526.54885050375,
-                8793.695558140773
-              ],
-              [
-                31199.132440661633,
-                10469.059274954276
-              ],
-              [
-                31413.069348826168,
-                7706.491444038394
-              ]
-            ]
-          },
-          "properties": {
-            "style": {},
-            "layerId": "layer-6d8d1a142d6a"
-          },
-          "style": {},
-          "createdAt": "2026-06-18T12:55:48.889243Z",
-          "updatedAt": "2026-06-18T14:23:20.441139Z"
-        },
-        {
-          "id": "3b934cb5-0411-4ca4-bc44-46bf183e7067",
-          "layerId": "layer-6d8d1a142d6a",
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [
-                  25099.045619273587,
-                  7300.054950844471
-                ],
-                [
-                  30742.62880484153,
-                  10768.553575735128
-                ],
-                [
-                  26753.19931159523,
-                  15339.191950591043
-                ],
-                [
-                  21498.82875951472,
-                  10671.305950738193
-                ],
-                [
-                  23384.519562577752,
-                  8905.540927977194
-                ],
-                [
-                  25099.045619273587,
-                  7300.054950844471
-                ]
-              ]
-            ]
-          },
-          "properties": {
-            "style": {
-              "color": "#f344ef",
-              "opacity": 0.25,
-              "lineWidth": 2
-            },
-            "layerId": "layer-6d8d1a142d6a"
-          },
-          "style": {
-            "color": "#f344ef",
-            "opacity": 0.65,
-            "lineWidth": 2
-          },
-          "createdAt": "2026-06-18T13:08:55.719555Z",
-          "updatedAt": "2026-06-18T14:23:35.934239Z"
-        }
-      ],
-      "comments": []
-    },
-    "slide-d325c505af8a": {
-      "layers": [
-        {
-          "id": "layer-4c10e596959c",
+          "id": "layer-38b994263857",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-1d491e85aea2",
+          "id": "layer-9c48714ef603",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
           "isLocked": false
         },
         {
-          "id": "layer-474968870531",
+          "id": "layer-97187f8f39af",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-daba30418b68",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-593553800f30",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3ef542e10b7a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5c7220f0c37d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2573222bc89f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-872be0babed8",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-12096e9cec7c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dc12a6aa155f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-4343c2c7593d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-44b27938a503",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-74debd7f8de9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-682e1e58156b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fee79f0dbafe",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fe0327b778ea",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-b54bd62daf8c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-084095c78cd6",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-009df3cb10ff",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1175c054834c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-a14f281928c3",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1a395e7b9a88",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-254ecf708c63",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2b74c4e971b4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-4ff6c69909d7",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f31594f643ce",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-14047675c325",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fa916bc1e9b4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2489dccccc67",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ca1a08a8eb44",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fb2f639dc583",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-48587eec2083",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-7862350c5a0e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e966e761f803",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e4562123141c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8742f7111200",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-55132519d751",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c7bde4afe975",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d8bcc6636569",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d1c393f643cb",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-64b0890d0dc1",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fd7b66878f4b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-9e9990e2a5ef",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e222fac494b2",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-cb9365857287",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-927657ef39ef",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3368189da239",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2a453aa15c93",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8129b2a87dae",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-87fa1ed3e550",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-00df78b50c74",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-b8467bad68d4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-62850c07801a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8bd121cc2f84",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1b87674e2dcd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d72087763dd6",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ad64a0525101",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-284f5a1c22c7",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-34cb8ed850e5",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ec4d4bb490bb",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-aab2bd181e0f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5fa478e0d87a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-a5dd9377c6d5",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-998ddaae74ce",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5863547ecc79",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-7d926fb18100",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-16e7310ea8e5",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8c31a8f1ac80",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e75aeda4a3cf",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c96d8a2cc920",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e0d9c8dbc889",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d9f65433ac98",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-b5ab17ea7c28",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d522e36adab7",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-773139856556",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-04987fe73831",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-32aba0ebd189",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-83a1358df819",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5bef6579df50",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5c6fec34805e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fe967b3e4c31",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-956a68558d52",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-cb2be84b835a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dfeea65f7304",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d983a33ecebb",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-32dabddf52c4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-6429caf6f74b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-94347ff16ee1",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-791cb6fdb0fc",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-bb8b78775bed",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-eaba5c0cdf50",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dad5b76ae91e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-314dfc3d286b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f4aa1e009865",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1a0f67c42de3",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dc02a5847fe6",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-9ea838406dcf",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8e119778f171",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3776db3cdd9e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f60e9c500702",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-78166dbbd0ea",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-063b908f465a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ec3c208a4a9d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-38205c54b2dc",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-908d4e60ef59",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1415ccd38c50",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-62cd56db0abd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dda4ca3d0185",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-bc29e7423f0d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-0c81bccaef6b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f078c496c468",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-058dff9e6f38",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-9d37cdc3d0b3",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-24074403f55f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-cac9cf9070ca",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-a3a6764b9d9b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-6d48d135cd53",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c93950c0a011",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-aa4b27380607",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-0786228cae01",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dea8bb4cb8d3",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5032e5e30b19",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c28fefc25e91",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5d40d5951f1b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e25efb7776d9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-03263d4a440b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d9f2ff8514f9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dcb0d141255e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-fb0bb956575a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-7cb05ef8b61d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f10e07e89dd0",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-b502b99fce6c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-bed1c6801792",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f29d606fcd20",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-be1e91300d9e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e0dbbff16285",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-0c96ce9fe987",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-a7f257ba4290",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-954d93b7ad09",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-866da232b0b1",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-74b779817ed5",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-403796ea3b19",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-7955d73f4131",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-4a7e6f2ef223",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-9f6a51231dd8",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-95111cb79efe",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8bf4eb822f83",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-075d8ffc389d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-4c3f7b05cdea",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-80e6fc4e0cdd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-737b99982055",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d41db71712d6",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e0798ca0099f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2c2b78d69814",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-9c19282f5915",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-cb012c082f1c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-af847ad9f2f8",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-0ad008ff033a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-862e3c67ec34",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5b06b3573be2",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-aa4ab5d3d2a0",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ae9eb3a9275c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f32ef124e864",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-688a84c4310d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-95f15b697c10",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-43ecbe204bb8",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-4ff3703a6e83",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8037eb8f6556",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5cc301075c9a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d7027f655c66",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-13ca3792986b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-eabb2ac8d76c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-7f249ef63ae9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-750b1651b413",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-25456b5df62e",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-da24c55ec253",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-391f98d6dfd9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f64140006c66",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-64ed352f0666",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f8d36cccbb8a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-6f15e84e2702",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-59f16d5be2ff",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-09609e2ebbdd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ada57fe087ad",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ab084407a6e1",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c4b7b58f563d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-461b2690e384",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e4ed4c1d4bcd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1b636e796897",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5ce6cfd234d4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-06564d60ac20",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-f916d829cac2",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c02ef2efad12",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-a2005e7465a9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e50fb612818c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-99b50e2529ab",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-693094a69dcd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dc604032d072",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-089725bc948d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2251ad0cc969",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-601a3164b154",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5619a090e647",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-ed8aa5da68c8",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-779949b0e91f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-72a485bd93fe",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dce16bf44152",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3c5f62dc79aa",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-0ea229473f4b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c0dbadddc5a1",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8c4e313d431d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-30f9079d164c",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2ee06ee41356",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-83b9c4859843",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-52037909935d",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5b71ee8ffbdd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-7f900194a8cf",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-832d811cb7e6",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3c685ff338cd",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-b0c38b6c972b",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-296c0b753c56",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-2401bfc37c09",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8b00538e65d9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-bad84d2e37f3",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-895cd8b8a8ee",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c5aabd78b254",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e2ee4fa23e83",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d6d1ac6b2298",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-62357ffd757a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-8000949a6229",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dd23069b648f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-332bcc8f3678",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c523a8d713a3",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-c35fa66780a4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-13827b058f26",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-e0f89c586131",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3b55ef6ea1a0",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-733d079821ae",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-dbc3dcc6fdda",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-25b092f01548",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5364b74fa8e9",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1122d45b3b66",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-4ef846e3f1a7",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-32eb3b50b6b4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-22506c4289b7",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-d7aff535adff",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-12e45a0297dc",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5d7cd8281ac5",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-3595cb5031aa",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-9e7d089424c2",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-0273f1687f2a",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-1e620dc26604",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-43801adf1510",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-cd51ffb12e06",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-5e306ef96d1f",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-a68f14c6fdb4",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-30b01bb5e828",
+          "name": "Review Layer",
+          "color": "#f97316",
+          "isVisible": true,
+          "isLocked": false
+        },
+        {
+          "id": "layer-55504e3e0ca9",
           "name": "Review Layer",
           "color": "#f97316",
           "isVisible": true,
@@ -622,36 +2126,17 @@
       ],
       "annotations": [],
       "comments": [],
-      "reviews": [],
-      "tags": []
-    },
-    "slide-f113bf2fc627": {
-      "layers": [
+      "reviews": [
         {
-          "id": "layer-4f7cf6cce7b4",
-          "name": "Review Layer",
-          "color": "#f97316",
-          "isVisible": true,
-          "isLocked": false
-        },
-        {
-          "id": "layer-8908a5e7395e",
-          "name": "Review Layer",
-          "color": "#f97316",
-          "isVisible": true,
-          "isLocked": false
-        },
-        {
-          "id": "layer-5246aa43e6eb",
-          "name": "Review Layer",
-          "color": "#f97316",
-          "isVisible": true,
-          "isLocked": false
+          "id": "review-5db15b2dfd07",
+          "annotationId": "d2d53c3c-660d-4954-855d-1f15fde51ef6",
+          "status": "approved",
+          "reviewer": "local-user",
+          "note": "",
+          "createdAt": "2026-06-22T14:39:33.137273Z",
+          "updatedAt": "2026-06-22T14:39:33.140257Z"
         }
       ],
-      "annotations": [],
-      "comments": [],
-      "reviews": [],
       "tags": []
     }
   }

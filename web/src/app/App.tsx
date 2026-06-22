@@ -7,12 +7,26 @@ import type { CatalogSlide } from "../domain/catalog";
 import type { ViewerManifest } from "../domain/contracts";
 import { fetchSlides, fetchManifestContent } from "../infrastructure/catalogClient";
 
+function parseInitialViewerParams() {
+  const p = new URLSearchParams(window.location.search);
+  const cx = Number(p.get("cx"));
+  const cy = Number(p.get("cy"));
+  const zoom = Number(p.get("zoom"));
+  return {
+    viewport: isFinite(cx) && isFinite(cy) && isFinite(zoom) && p.has("cx") ? { cx, cy, zoom } : null,
+    annotationId: p.get("ann") ?? null,
+    overlayIds: p.get("overlays")?.split(",").filter(Boolean) ?? []
+  };
+}
+
 export function App() {
   const [route, setRoute] = useState(() => window.location.pathname || "/");
+  const [initialViewerParams] = useState(parseInitialViewerParams);
   const [slides, setSlides] = useState<CatalogSlide[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [manifest, setManifest] = useState<ViewerManifest | null>(null);
   const [status, setStatus] = useState("loading");
+  const [viewerError, setViewerError] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -59,13 +73,17 @@ export function App() {
     const controller = new AbortController();
     const [slideId, versionId] = selectedKey.split(":");
     (async () => {
+      setViewerError(null);
       const nextManifest = (await fetchManifestContent(slideId, versionId, controller.signal)) as ViewerManifest;
       setManifest(nextManifest);
       const params = new URLSearchParams(window.location.search);
       params.set("slide", slideId);
       window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
     })().catch(() => {
-      if (!controller.signal.aborted) setStatus("error");
+      if (!controller.signal.aborted) {
+        setManifest(null);
+        setViewerError("Failed to load the selected slide manifest.");
+      }
     });
     return () => controller.abort();
   }, [isViewerRoute, selectedKey]);
@@ -187,7 +205,15 @@ export function App() {
       {isViewerRoute ? (
         <>
           {slides.length === 0 ? <div className="workspace-empty" style={{ padding: 24 }}>No ingested slides found.</div> : null}
-          {manifest ? <Viewer manifest={manifest} /> : null}
+          {viewerError ? <div className="workspace-inline-alert" role="alert">{viewerError}</div> : null}
+          {manifest ? (
+            <Viewer
+              manifest={manifest}
+              initialViewport={initialViewerParams.viewport}
+              initialAnnotationId={initialViewerParams.annotationId}
+              initialOverlayIds={initialViewerParams.overlayIds}
+            />
+          ) : null}
         </>
       ) : null}
       {isSlideOpsRoute ? <SlidesOperationsPage /> : null}

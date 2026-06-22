@@ -24,6 +24,9 @@ data/artifacts/*
 data/minio/
 !data/minio/.gitkeep
 
+# Local tooling binaries
+.tools/
+
 # Generated catalogs
 data/catalog/catalog.json
 data/catalog/benchmark-catalog.json

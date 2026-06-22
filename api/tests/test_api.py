@@ -17,6 +17,10 @@ class _FakeArtifactProxy:
     def put_bytes(self, object_path: str, payload: bytes, media_type: str = "application/octet-stream") -> None:
         self.objects[object_path] = (payload, media_type)
 
+    def load_json(self, object_path: str):
+        payload, _ = self.objects[object_path]
+        return json.loads(payload.decode("utf-8"))
+
     def rewrite_payload(self, payload):
         if isinstance(payload, dict):
             return {key: self.rewrite_payload(value) for key, value in payload.items()}
@@ -256,6 +260,8 @@ def test_overlay_and_review_routes_roundtrip() -> None:
     overlay_chunk = client.get(f"/slides/slide-1/overlays/overlay-1/chunks/{chunk_id}")
     assert overlay_chunk.status_code == 200
     assert overlay_chunk.json()["features"][0]["id"] == "feature-1"
+    overlay_cluster_chunk = client.get(f"/slides/slide-1/overlays/overlay-1/chunks/{chunk_id}?representation=cluster")
+    assert overlay_cluster_chunk.status_code == 200
 
     layer_response = client.put(
         "/slides/slide-1/annotation-layers",
@@ -397,6 +403,167 @@ def test_overlay_upload_file_registers_overlay_job() -> None:
         assert overlay_jobs.json()[0]["job_id"] == body["job_id"]
         assert overlay_jobs.json()[0]["metrics"]["feature_count"] == 1
         assert fake_proxy.objects
+    finally:
+        container.minio_proxy = original_proxy
+
+
+def test_overlay_upload_file_stages_job_when_runtime_is_running() -> None:
+    _reset_workspace_files()
+    original_proxy = container.minio_proxy
+    fake_proxy = _FakeArtifactProxy()
+
+    class _RuntimeStub:
+        def __init__(self) -> None:
+            self.enqueued: list[dict[str, object]] = []
+
+        def is_running(self) -> bool:
+            return True
+
+        def enqueue(self, payload: dict[str, object]) -> None:
+            self.enqueued.append(payload)
+
+    runtime_stub = _RuntimeStub()
+
+    import api.api_service.main as main_module
+
+    original_runtime = main_module.overlay_ingestion_runtime
+    container.minio_proxy = fake_proxy
+    main_module.overlay_ingestion_runtime = runtime_stub
+    payload = {"type": "FeatureCollection", "features": []}
+    try:
+        response = client.post(
+            "/overlay-uploads/file",
+            data={"slide_id": "slide-1", "source_format": "geojson", "display_name": "Queued Overlay"},
+            files={"file": ("overlay.geojson", json.dumps(payload).encode("utf-8"), "application/geo+json")},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["stage"] == "queued"
+        assert body["message"] == "Awaiting overlay worker pickup"
+        assert len(runtime_stub.enqueued) == 1
+        assert runtime_stub.enqueued[0]["job_id"] == body["job_id"]
+        assert body["job_id"] == client.get("/overlay-jobs").json()[0]["job_id"]
+        assert any(path.startswith("s3://raw-overlays/") for path in fake_proxy.objects)
+    finally:
+        main_module.overlay_ingestion_runtime = original_runtime
+        container.minio_proxy = original_proxy
+
+
+def test_package_backed_overlay_routes_resolve_manifest_and_chunks_from_storage() -> None:
+    _reset_workspace_files()
+    original_proxy = container.minio_proxy
+    fake_proxy = _FakeArtifactProxy()
+    container.minio_proxy = fake_proxy
+    try:
+        chunk_path = "s3://derived/overlays/v1/slide-1/overlay-1/v1/overlay.ovsip/blocks/chunk-0-0.ovsib"
+        delivery_manifest = {
+            "schema": "overlay-manifest-v1",
+            "slideId": "slide-1",
+            "overlayId": "overlay-1",
+            "name": "Package Overlay",
+            "kind": "vector",
+            "versionId": "v1",
+            "sourceFormat": "geoparquet",
+            "coordinateSpace": {"origin": "top-left", "unit": "level-0-pixel"},
+            "runtimeFormat": "ovsi",
+            "artifact": {
+                "layout": "package",
+                "ovsiPath": None,
+                "manifestPath": "s3://derived/overlays/v1/slide-1/overlay-1/v1/overlay.ovsip/manifest.ovsim",
+                "indexPath": "s3://derived/overlays/v1/slide-1/overlay-1/v1/overlay.ovsip/index.ovsii",
+                "stylePath": "s3://derived/overlays/v1/slide-1/overlay-1/v1/overlay.ovsip/styles/default.ovsis",
+            },
+            "featureCount": 1,
+            "bounds": [0, 0, 10, 10],
+            "legend": [{"label": "tumor"}],
+            "metadata": {},
+            "chunking": {
+                "strategy": "spatial-fixed-grid",
+                "chunkSize": 2048,
+                "chunks": [
+                    {
+                        "id": "chunk-0-0",
+                        "bounds": [0, 0, 2048, 2048],
+                        "featureCount": 1,
+                        "path": chunk_path,
+                    }
+                ],
+            },
+        }
+        fake_proxy.put_bytes(
+            chunk_path,
+            json.dumps(
+                {
+                    "schema": "ovsib-v1",
+                    "id": "chunk-0-0",
+                    "bounds": [0, 0, 2048, 2048],
+                    "featureCount": 1,
+                    "features": [
+                        {
+                            "id": "feature-1",
+                            "name": "Region 1",
+                            "kind": "polygon",
+                            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [10, 0], [10, 10], [0, 0]]]},
+                            "properties": {"class": "tumor"},
+                            "styleHints": {"color": [56, 189, 248, 255]},
+                            "bounds": [0, 0, 10, 10],
+                        }
+                    ],
+                }
+            ).encode("utf-8"),
+            "application/json",
+        )
+        container.overlays.path.write_text(
+            json.dumps(
+                {
+                    "slides": {
+                        "slide-1": {
+                            "overlays": [
+                                {
+                                    "id": "overlay-1",
+                                    "name": "Package Overlay",
+                                    "kind": "vector",
+                                    "sourceFormat": "geoparquet",
+                                    "versionId": "v1",
+                                    "features": [],
+                                    "legend": [{"label": "tumor"}],
+                                    "metadata": {
+                                        "runtimeFormat": "ovsi",
+                                        "featureCount": 1,
+                                        "artifact": delivery_manifest["artifact"],
+                                        "bounds": [0, 0, 10, 10],
+                                        "deliveryManifest": delivery_manifest,
+                                        "chunkPaths": {"chunk-0-0": chunk_path},
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                },
+                indent=2,
+            )
+        )
+
+        overlays = client.get("/slides/slide-1/overlays")
+        assert overlays.status_code == 200
+        assert overlays.json()[0]["featureCount"] == 1
+
+        detail = client.get("/slides/slide-1/overlays/overlay-1")
+        assert detail.status_code == 200
+        assert detail.json()["features"] == []
+        assert "deliveryManifest" not in detail.json()["metadata"]
+        assert "chunkPaths" not in detail.json()["metadata"]
+        assert detail.json()["delivery"]["detailMode"] == "chunked"
+
+        manifest = client.get("/slides/slide-1/overlays/overlay-1/manifest")
+        assert manifest.status_code == 200
+        assert manifest.json()["featureCount"] == 1
+        assert manifest.json()["chunking"]["chunks"][0]["id"] == "chunk-0-0"
+
+        chunk = client.get("/slides/slide-1/overlays/overlay-1/chunks/chunk-0-0")
+        assert chunk.status_code == 200
+        assert chunk.json()["features"][0]["id"] == "feature-1"
     finally:
         container.minio_proxy = original_proxy
 

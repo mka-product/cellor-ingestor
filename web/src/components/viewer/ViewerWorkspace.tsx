@@ -1,3 +1,4 @@
+import { Eye, EyeOff, Palette } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ViewerManifest } from "../../domain/contracts";
@@ -9,6 +10,7 @@ import type {
   AnnotationReview,
   OverlayClassStyle,
   OverlayFeature,
+  OverlayManifest,
   OverlaySource,
   SlideTag,
   ViewerWorkspaceState
@@ -38,19 +40,83 @@ import { FloatingPanelFrame } from "./FloatingPanelFrame";
 import { LayerPanel } from "./LayerPanel";
 import { MetadataPanel } from "./MetadataPanel";
 import { OverlayStylePanel } from "./OverlayStylePanel";
-import { ViewerCanvas } from "./ViewerCanvas";
+import { ViewerCanvas, type OverlayGroup } from "./ViewerCanvas";
 import { ViewerToolbar } from "./ViewerToolbar";
 import { WorkspaceShortcuts } from "./WorkspaceShortcuts";
 import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
 import type { OverlayWindow } from "../../viewer/overlayManifest";
+import { computeOverlayLodThresholds, type OverlayLodThresholds, type OverlayRenderMode } from "../../viewer/overlayLod";
 import { useOverlayRuntime } from "../../viewer/useOverlayRuntime";
+import {
+  alphaColor,
+  colorForFeature,
+  defaultOverlayStyleMap,
+  inferOverlaySemanticMode,
+  sanitizeOverlayLabel
+} from "../../viewer/overlayStyling";
+import { MINIMAP_WIDTH } from "./viewerMath";
 
 type Props = {
   manifest: ViewerManifest;
+  initialViewport?: { cx: number; cy: number; zoom: number } | null;
+  initialAnnotationId?: string | null;
+  initialOverlayIds?: string[];
 };
 
 type PanelId = "metadata" | "layers" | "annotation" | "comments" | "overlays" | "overlay-style" | "shortcuts";
 type PanelLayout = Record<PanelId, { x: number; y: number; zIndex: number }>;
+
+type OverlayStats = {
+  mode: "idle" | "inline" | "chunked";
+  sourceMode: "real" | "over-budget";
+  visibleChunkCount: number;
+  cacheSize: number;
+  inflightChunkCount: number;
+  loadedFeatureCount: number;
+  renderedInputFeatureCount: number;
+  loadedChunkCount: number;
+  visibleFeatureEstimate: number;
+  runtimeFormat: string;
+  representationMode: OverlayRenderMode;
+};
+
+type OverlayRuntimeData = {
+  features: OverlayFeature[];
+  runtimeMode: OverlayRenderMode;
+  manifest: OverlayManifest | null;
+  stats: OverlayStats;
+};
+
+// Must be defined outside ViewerWorkspace so its identity is stable across parent re-renders
+// and React doesn't remount it (which would tear down the overlay runtime hook).
+function OverlayRuntimeConnector(props: {
+  slideId: string;
+  overlayId: string;
+  visibleWindow: OverlayWindow | null;
+  overlayScale: number;
+  lodThresholds: OverlayLodThresholds;
+  onUpdate: (overlayId: string, data: OverlayRuntimeData) => void;
+}) {
+  const { overlayManifest, overlayFeatures, runtimeStats } = useOverlayRuntime(
+    props.slideId,
+    props.overlayId,
+    props.visibleWindow,
+    props.overlayScale,
+    props.lodThresholds
+  );
+  const { onUpdate, overlayId } = props;
+
+  useEffect(() => {
+    onUpdate(overlayId, {
+      features: overlayFeatures,
+      runtimeMode: runtimeStats.representationMode,
+      manifest: overlayManifest,
+      stats: runtimeStats
+    });
+  }, [overlayId, overlayFeatures, runtimeStats, overlayManifest, onUpdate]);
+
+  return null;
+}
 
 const INITIAL_STATE: ViewerWorkspaceState = {
   showMetadata: false,
@@ -58,7 +124,9 @@ const INITIAL_STATE: ViewerWorkspaceState = {
   showAnnotations: false,
   showHelp: false,
   isFullscreen: false,
-  selectedOverlayId: null,
+  activeOverlayIds: [],
+  overlayVisibility: {},
+  focusedOverlayId: null,
   selectedAnnotationId: null,
   activeLayerId: null,
   showComments: false,
@@ -76,10 +144,6 @@ const INITIAL_LAYOUT: PanelLayout = {
   shortcuts: { x: 780, y: 380, zIndex: 36 }
 };
 
-function styleKey(feature: OverlayFeature) {
-  return String(feature.properties.class ?? feature.properties.label ?? "default");
-}
-
 function flattenThread(comments: AnnotationComment[]) {
   const roots = comments.filter((comment) => !comment.parentId);
   const repliesByParent = new Map<string, AnnotationComment[]>();
@@ -92,17 +156,25 @@ function flattenThread(comments: AnnotationComment[]) {
   return roots.map((comment) => ({ comment, replies: repliesByParent.get(comment.id) ?? [] }));
 }
 
-export function ViewerWorkspace({ manifest }: Props) {
+export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId, initialOverlayIds }: Props) {
   const workspaceRef = useRef<HTMLElement | null>(null);
   const annotationsRef = useRef<AnnotationFeature[]>([]);
   const queuedPersistRef = useRef<{ next: AnnotationFeature[]; previous: AnnotationFeature[] } | null>(null);
   const persistTimerRef = useRef<number | null>(null);
   const flushInFlightRef = useRef<Promise<void> | null>(null);
-  const [workspace, setWorkspace] = useState(INITIAL_STATE);
+  const [workspace, setWorkspace] = useState<ViewerWorkspaceState>(() => ({
+    ...INITIAL_STATE,
+    selectedAnnotationId: initialAnnotationId ?? null,
+    showAnnotationEditor: initialAnnotationId != null,
+    showComments: initialAnnotationId != null
+  }));
   const [panelLayout, setPanelLayout] = useState(INITIAL_LAYOUT);
   const [tool, setTool] = useState("view");
   const [overlaySources, setOverlaySources] = useState<OverlaySource[]>([]);
-  const [overlayStyles, setOverlayStyles] = useState<Record<string, OverlayClassStyle>>({});
+  // Per-overlay styles: overlayId → classKey → style
+  const [overlayStylesMap, setOverlayStylesMap] = useState<Record<string, Record<string, OverlayClassStyle>>>({});
+  // Per-overlay runtime data reported by OverlayRuntimeConnector children
+  const [overlayRuntimesByKey, setOverlayRuntimesByKey] = useState<Record<string, OverlayRuntimeData>>({});
   const [annotationLayers, setAnnotationLayers] = useState<AnnotationLayer[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationFeature[]>([]);
   const [comments, setComments] = useState<AnnotationComment[]>([]);
@@ -128,12 +200,99 @@ export function ViewerWorkspace({ manifest }: Props) {
     }>
   >([]);
   const [overlayVisibleWindow, setOverlayVisibleWindow] = useState<OverlayWindow | null>(null);
+  // Viewport scale (2^zoom) forwarded from ViewerCanvas for pyramid-level-aware overlay LOD.
+  const [overlayViewportScale, setOverlayViewportScale] = useState<number>(1);
+  const lodThresholds = useMemo(() => computeOverlayLodThresholds(manifest.levels), [manifest.levels]);
+  const minimapHeight = Math.round((MINIMAP_WIDTH * manifest.height) / manifest.width);
   const localPresenceId = useMemo(() => `user-${Math.random().toString(36).slice(2, 8)}`, []);
   const presenceSocketRef = useRef<WebSocket | null>(null);
-  const { overlayManifest, overlayFeatures: rawOverlayFeatures, runtimeStats } = useOverlayRuntime(
-    manifest.slideId,
-    workspace.selectedOverlayId,
-    overlayVisibleWindow
+  const lastPresencePayloadRef = useRef<Record<string, unknown> | null>(null);
+  const urlViewportRef = useRef<{ cx: number; cy: number; zoom: number } | null>(null);
+  const urlSyncTimerRef = useRef<number | null>(null);
+
+  // Stable callback so OverlayRuntimeConnector's useEffect doesn't re-fire due to reference changes.
+  const handleRuntimeUpdate = useCallback((overlayId: string, data: OverlayRuntimeData) => {
+    setOverlayRuntimesByKey((current) => {
+      const prev = current[overlayId];
+      // Skip update if nothing meaningful changed to avoid render cascades
+      if (
+        prev &&
+        prev.features === data.features &&
+        prev.runtimeMode === data.runtimeMode &&
+        prev.manifest === data.manifest &&
+        prev.stats === data.stats
+      ) {
+        return current;
+      }
+      return { ...current, [overlayId]: data };
+    });
+  }, []);
+
+  // Clean up runtime data for overlays that were deactivated.
+  useEffect(() => {
+    const activeSet = new Set(workspace.activeOverlayIds);
+    setOverlayRuntimesByKey((current) => {
+      const staleKeys = Object.keys(current).filter((id) => !activeSet.has(id));
+      if (staleKeys.length === 0) return current;
+      const next = { ...current };
+      staleKeys.forEach((id) => delete next[id]);
+      return next;
+    });
+  }, [workspace.activeOverlayIds]);
+
+  // Build styled overlay groups for the canvas — one per visible active overlay.
+  const overlayGroups = useMemo((): OverlayGroup[] => {
+    return workspace.activeOverlayIds
+      .filter((id) => workspace.overlayVisibility[id] !== false)
+      .flatMap((id) => {
+        const runtime = overlayRuntimesByKey[id];
+        if (!runtime || runtime.features.length === 0) return [];
+        const source = overlaySources.find((s) => s.id === id) ?? null;
+        const styles = overlayStylesMap[id] ?? {};
+        const semanticMode = inferOverlaySemanticMode(runtime.features, source);
+        const defaultStyles = defaultOverlayStyleMap(source, runtime.features, semanticMode);
+        const styledFeatures = runtime.features.flatMap((feature) => {
+          const style = colorForFeature(feature, semanticMode, styles, defaultStyles);
+          if (style.hidden) return [];
+          const count = typeof feature.properties.count === "number" ? feature.properties.count : 1;
+          // Skip densityBoost for heatmap-mode overlays: cluster centroid features are binned by
+          // buildHeatmapFeatures which handles density→opacity itself. Applying the boost here would
+          // double-count density and cap the alpha below the user's class-opacity setting.
+          const densityBoost =
+            runtime.runtimeMode === "heatmap"
+              ? 1
+              : feature.properties.isCluster || feature.properties.isHeatmap
+                ? Math.min(1, 0.45 + Math.log2(count + 1) / 8)
+                : 1;
+          return [{
+            ...feature,
+            name: sanitizeOverlayLabel(feature.name),
+            properties: {
+              ...feature.properties,
+              class:
+                typeof feature.properties.class === "string"
+                  ? sanitizeOverlayLabel(feature.properties.class)
+                  : feature.properties.class
+            },
+            styleHints: {
+              ...feature.styleHints,
+              color: alphaColor(style.color, style.opacity * densityBoost),
+              strokeWidth: style.strokeWidth
+            }
+          }];
+        });
+        return [{ id, features: styledFeatures, runtimeMode: runtime.runtimeMode }];
+      });
+  }, [workspace.activeOverlayIds, workspace.overlayVisibility, overlayRuntimesByKey, overlayStylesMap, overlaySources]);
+
+  const focusedRuntimeData = useMemo(
+    () => (workspace.focusedOverlayId ? overlayRuntimesByKey[workspace.focusedOverlayId] ?? null : null),
+    [workspace.focusedOverlayId, overlayRuntimesByKey]
+  );
+
+  const focusedOverlaySource = useMemo(
+    () => overlaySources.find((s) => s.id === workspace.focusedOverlayId) ?? null,
+    [overlaySources, workspace.focusedOverlayId]
   );
 
   useEffect(() => {
@@ -209,7 +368,7 @@ export function ViewerWorkspace({ manifest }: Props) {
           selectedAnnotationId: null,
           showComments: false,
           showAnnotationEditor: false,
-          selectedOverlayId: null,
+          focusedOverlayId: null,
           showOverlayStyle: false
         }));
       }
@@ -219,25 +378,13 @@ export function ViewerWorkspace({ manifest }: Props) {
       if (key === "4") setTool("polygon");
     };
     const updateModifier = (event: KeyboardEvent) => {
-      if (event.altKey) {
-        setOperationModifier("subtract");
-        return;
-      }
-      if (event.shiftKey) {
-        setOperationModifier("merge");
-        return;
-      }
+      if (event.altKey) { setOperationModifier("subtract"); return; }
+      if (event.shiftKey) { setOperationModifier("merge"); return; }
       setOperationModifier(null);
     };
     const clearModifier = (event: KeyboardEvent) => {
-      if (event.altKey) {
-        setOperationModifier("subtract");
-        return;
-      }
-      if (event.shiftKey) {
-        setOperationModifier("merge");
-        return;
-      }
+      if (event.altKey) { setOperationModifier("subtract"); return; }
+      if (event.shiftKey) { setOperationModifier("merge"); return; }
       setOperationModifier(null);
     };
     const resetModifier = () => setOperationModifier(null);
@@ -265,14 +412,15 @@ export function ViewerWorkspace({ manifest }: Props) {
     const socket = new WebSocket(resolveWebSocketUrl(`/slides/${manifest.slideId}/presence`));
     presenceSocketRef.current = socket;
     socket.onopen = () => {
-      if (presenceSocketRef.current === socket) {
-        setPresenceStatus("connected");
+      if (presenceSocketRef.current !== socket) return;
+      setPresenceStatus("connected");
+      const pending = lastPresencePayloadRef.current;
+      if (pending) {
+        socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, ...pending }));
       }
     };
     socket.onerror = () => {
-      if (presenceSocketRef.current === socket) {
-        setPresenceStatus("unavailable");
-      }
+      if (presenceSocketRef.current === socket) setPresenceStatus("unavailable");
     };
     socket.onmessage = (event) => {
       try {
@@ -289,10 +437,11 @@ export function ViewerWorkspace({ manifest }: Props) {
           centerY?: number;
         };
         if (payload.type !== "presence.cursor" || !payload.userId || payload.userId === localPresenceId) return;
+        const remoteUserId = payload.userId;
         setRemotePresence((current) => {
-          const next = current.filter((entry) => entry.userId !== payload.userId);
+          const next = current.filter((entry) => entry.userId !== remoteUserId);
           next.push({
-            userId: payload.userId,
+            userId: remoteUserId,
             x: payload.x ?? 0.5,
             y: payload.y ?? 0.5,
             zoom: payload.zoom ?? 0,
@@ -316,43 +465,55 @@ export function ViewerWorkspace({ manifest }: Props) {
     };
     return () => {
       socket.close();
-      if (presenceSocketRef.current === socket) {
-        presenceSocketRef.current = null;
-      }
+      if (presenceSocketRef.current === socket) presenceSocketRef.current = null;
       setRemotePresence([]);
     };
   }, [localPresenceId, manifest.slideId, presenceEnabled]);
+
+  // Sync annotation selection and active overlays to URL immediately when they change.
+  // Viewport is written separately via the debounced handler in handlePresenceUpdate.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (workspace.selectedAnnotationId) {
+      params.set("ann", workspace.selectedAnnotationId);
+    } else {
+      params.delete("ann");
+    }
+    if (workspace.activeOverlayIds.length > 0) {
+      params.set("overlays", workspace.activeOverlayIds.join(","));
+    } else {
+      params.delete("overlays");
+    }
+    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+  }, [workspace.selectedAnnotationId, workspace.activeOverlayIds]);
+
+  // Restore initial overlay activations once sources are available.
+  const initialOverlayIdsRef = useRef(initialOverlayIds ?? []);
+  const initialOverlaysAppliedRef = useRef(false);
+  useEffect(() => {
+    if (initialOverlaysAppliedRef.current) return;
+    if (overlaySources.length === 0 || initialOverlayIdsRef.current.length === 0) return;
+    initialOverlaysAppliedRef.current = true;
+    const validIds = initialOverlayIdsRef.current.filter((id) => overlaySources.some((s) => s.id === id));
+    if (validIds.length === 0) return;
+    setWorkspace((current) => {
+      const alreadyActive = new Set(current.activeOverlayIds);
+      const toAdd = validIds.filter((id) => !alreadyActive.has(id));
+      if (toAdd.length === 0) return current;
+      const nextVisibility = Object.fromEntries(toAdd.map((id) => [id, true]));
+      return {
+        ...current,
+        activeOverlayIds: [...current.activeOverlayIds, ...toAdd],
+        overlayVisibility: { ...current.overlayVisibility, ...nextVisibility }
+      };
+    });
+  }, [overlaySources]);
 
   const effectiveAnnotationOperation = operationModifier ?? annotationOperation;
 
   const selectedAnnotation = useMemo(
     () => annotations.find((annotation) => annotation.id === workspace.selectedAnnotationId) ?? null,
     [annotations, workspace.selectedAnnotationId]
-  );
-
-  const selectedOverlay = useMemo(
-    () => overlaySources.find((overlay) => overlay.id === workspace.selectedOverlayId) ?? null,
-    [overlaySources, workspace.selectedOverlayId]
-  );
-
-  const styledOverlayFeatures = useMemo(
-    () =>
-      rawOverlayFeatures.map((feature) => {
-        const style = overlayStyles[styleKey(feature)];
-        if (!style) return feature;
-        const alpha = Math.max(0, Math.min(255, Math.round(style.opacity * 255)));
-        const hex = style.color.replace("#", "");
-        const parsed = Number.parseInt(hex.length === 3 ? hex.split("").map((part) => part + part).join("") : hex, 16);
-        return {
-          ...feature,
-          styleHints: {
-            ...feature.styleHints,
-            color: [parsed >> 16, (parsed >> 8) & 255, parsed & 255, alpha],
-            strokeWidth: style.strokeWidth
-          }
-        };
-      }),
-    [overlayStyles, rawOverlayFeatures]
   );
 
   const threadedComments = useMemo(() => flattenThread(comments), [comments]);
@@ -363,9 +524,8 @@ export function ViewerWorkspace({ manifest }: Props) {
 
   useEffect(() => {
     return () => {
-      if (persistTimerRef.current != null) {
-        window.clearTimeout(persistTimerRef.current);
-      }
+      if (persistTimerRef.current != null) window.clearTimeout(persistTimerRef.current);
+      if (urlSyncTimerRef.current != null) window.clearTimeout(urlSyncTimerRef.current);
     };
   }, []);
 
@@ -391,13 +551,10 @@ export function ViewerWorkspace({ manifest }: Props) {
   }, []);
 
   const flushPersistQueue = useCallback(async () => {
-    if (flushInFlightRef.current) {
-      await flushInFlightRef.current;
-    }
+    if (flushInFlightRef.current) await flushInFlightRef.current;
     const queued = queuedPersistRef.current;
     if (!queued) return;
     queuedPersistRef.current = null;
-
     const job = (async () => {
       const { next: features, previous } = queued;
       const previousById = new Map(previous.map((feature) => [feature.id, feature]));
@@ -409,7 +566,6 @@ export function ViewerWorkspace({ manifest }: Props) {
         return JSON.stringify(current) !== JSON.stringify(feature);
       });
       const affectedIds = new Set([...removed.map((feature) => feature.id), ...changed.map((feature) => feature.id)]);
-
       try {
         await Promise.all([
           ...removed.map((feature) => deleteAnnotation(manifest.slideId, feature.id)),
@@ -427,12 +583,9 @@ export function ViewerWorkspace({ manifest }: Props) {
         flushInFlightRef.current = null;
       }
     })();
-
     flushInFlightRef.current = job;
     await job;
-    if (queuedPersistRef.current) {
-      await flushPersistQueue();
-    }
+    if (queuedPersistRef.current) await flushPersistQueue();
   }, [manifest.slideId, rollbackAffectedAnnotations]);
 
   const persistAnnotations = useCallback((features: AnnotationFeature[]) => {
@@ -441,9 +594,7 @@ export function ViewerWorkspace({ manifest }: Props) {
     annotationsRef.current = features;
     setAnnotationSaveError(null);
     queuedPersistRef.current = { next: features, previous };
-    if (persistTimerRef.current != null) {
-      window.clearTimeout(persistTimerRef.current);
-    }
+    if (persistTimerRef.current != null) window.clearTimeout(persistTimerRef.current);
     persistTimerRef.current = window.setTimeout(() => {
       persistTimerRef.current = null;
       void flushPersistQueue();
@@ -464,16 +615,6 @@ export function ViewerWorkspace({ manifest }: Props) {
     setWorkspace((current) => ({ ...current, activeLayerId: layer.id }));
   };
 
-  const handleSelectOverlay = useCallback(
-    (overlayId: string | null) =>
-      setWorkspace((current) => ({
-        ...current,
-        selectedOverlayId: overlayId,
-        showOverlayStyle: overlayId != null
-      })),
-    []
-  );
-
   const handleSelectAnnotation = useCallback(
     (annotationId: string | null) =>
       setWorkspace((current) => ({
@@ -485,8 +626,99 @@ export function ViewerWorkspace({ manifest }: Props) {
     []
   );
 
+  const handlePresenceUpdate = useCallback(
+    (payload: {
+      x: number;
+      y: number;
+      zoom: number;
+      slideX: number;
+      slideY: number;
+      viewport: OverlayWindow;
+      centerX: number;
+      centerY: number;
+    }) => {
+      // Track viewport scale so OverlayRuntimeConnector can use pyramid-level-aware LOD thresholds.
+      setOverlayViewportScale(2 ** payload.zoom);
+      lastPresencePayloadRef.current = payload;
+      if (presenceEnabled) {
+        const socket = presenceSocketRef.current;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, ...payload }));
+        }
+      }
+      // Debounce viewport URL update — fires 800ms after the last pan/zoom.
+      urlViewportRef.current = { cx: payload.centerX, cy: payload.centerY, zoom: payload.zoom };
+      if (urlSyncTimerRef.current != null) window.clearTimeout(urlSyncTimerRef.current);
+      urlSyncTimerRef.current = window.setTimeout(() => {
+        urlSyncTimerRef.current = null;
+        const vp = urlViewportRef.current;
+        if (!vp) return;
+        const params = new URLSearchParams(window.location.search);
+        params.set("cx", String(Math.round(vp.cx)));
+        params.set("cy", String(Math.round(vp.cy)));
+        params.set("zoom", vp.zoom.toFixed(3));
+        window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+      }, 800);
+    },
+    [localPresenceId, presenceEnabled]
+  );
+
+
+  const toggleOverlayActive = (overlayId: string) => {
+    setWorkspace((current) => {
+      const isActive = current.activeOverlayIds.includes(overlayId);
+      if (isActive) {
+        const nextIds = current.activeOverlayIds.filter((id) => id !== overlayId);
+        const nextFocused = current.focusedOverlayId === overlayId ? null : current.focusedOverlayId;
+        return {
+          ...current,
+          activeOverlayIds: nextIds,
+          focusedOverlayId: nextFocused,
+          showOverlayStyle: nextFocused != null ? current.showOverlayStyle : false
+        };
+      }
+      return {
+        ...current,
+        activeOverlayIds: [...current.activeOverlayIds, overlayId],
+        overlayVisibility: { ...current.overlayVisibility, [overlayId]: true }
+      };
+    });
+  };
+
+  const toggleOverlayVisibility = (overlayId: string) => {
+    setWorkspace((current) => ({
+      ...current,
+      overlayVisibility: {
+        ...current.overlayVisibility,
+        [overlayId]: current.overlayVisibility[overlayId] === false ? true : false
+      }
+    }));
+  };
+
+  const focusOverlayStyle = (overlayId: string) => {
+    setWorkspace((current) => ({
+      ...current,
+      focusedOverlayId: overlayId,
+      showOverlayStyle: current.focusedOverlayId === overlayId ? !current.showOverlayStyle : true
+    }));
+  };
+
+  const activeCount = workspace.activeOverlayIds.length;
+
   return (
     <section ref={workspaceRef} className={`workspace-body ${workspace.isFullscreen ? "is-fullscreen" : ""}`}>
+      {/* One connector per active overlay — each runs its own useOverlayRuntime hook instance */}
+      {workspace.activeOverlayIds.map((overlayId) => (
+        <OverlayRuntimeConnector
+          key={overlayId}
+          slideId={manifest.slideId}
+          overlayId={overlayId}
+          visibleWindow={overlayVisibleWindow}
+          overlayScale={overlayViewportScale}
+          lodThresholds={lodThresholds}
+          onUpdate={handleRuntimeUpdate}
+        />
+      ))}
       <ViewerToolbar
         onZoomIn={() => window.dispatchEvent(new CustomEvent("viewer-zoom-in"))}
         onZoomOut={() => window.dispatchEvent(new CustomEvent("viewer-zoom-out"))}
@@ -512,6 +744,7 @@ export function ViewerWorkspace({ manifest }: Props) {
         annotationOperation={annotationOperation}
         effectiveAnnotationOperation={effectiveAnnotationOperation}
         onAnnotationOperationChange={setAnnotationOperation}
+        minimapBottom={16 + minimapHeight}
       />
       {annotationSaveError ? (
         <div className="workspace-inline-alert" role="alert">
@@ -520,23 +753,18 @@ export function ViewerWorkspace({ manifest }: Props) {
       ) : null}
       <ViewerCanvas
         manifest={manifest}
-        overlayFeatures={styledOverlayFeatures}
+        initialViewport={initialViewport}
+        overlayGroups={overlayGroups}
         annotationLayers={annotationLayers.filter((layer) => layer.isVisible)}
         annotations={annotations}
         tool={tool}
         annotationOperation={effectiveAnnotationOperation}
         activeLayerId={workspace.activeLayerId}
         selectedAnnotationId={workspace.selectedAnnotationId}
-        onSelectOverlay={handleSelectOverlay}
         onSelectAnnotation={handleSelectAnnotation}
         onPersistAnnotations={persistAnnotations}
         remotePresence={remotePresence}
-        onPresenceUpdate={(payload) => {
-          if (!presenceEnabled) return;
-          const socket = presenceSocketRef.current;
-          if (!socket || socket.readyState !== WebSocket.OPEN) return;
-          socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, ...payload }));
-        }}
+        onPresenceUpdate={handlePresenceUpdate}
         onViewportStatsChange={setViewportStats}
         onVisibleWindowChange={setOverlayVisibleWindow}
       />
@@ -606,67 +834,116 @@ export function ViewerWorkspace({ manifest }: Props) {
           position={panelLayout.overlays}
           zIndex={panelLayout.overlays.zIndex}
           subtitle={
-            selectedOverlay
-              ? `${selectedOverlay.featureCount} features · ${runtimeStats.mode} · ${runtimeStats.runtimeFormat || "unknown"}`
-              : "Select an overlay to render."
+            activeCount > 0
+              ? `${activeCount} active · ${overlayGroups.reduce((sum, g) => sum + g.features.length, 0)} features rendered`
+              : "Click an overlay to activate it."
           }
           onPositionChange={(position) => updatePanelPosition("overlays", position)}
           onBringToFront={() => bumpPanel("overlays")}
-          onClose={() => setWorkspace((current) => ({ ...current, showOverlays: false, selectedOverlayId: null }))}
-          actions={
-            selectedOverlay ? (
-              <button
-                type="button"
-                className="workspace-icon-button"
-                onClick={() => setWorkspace((current) => ({ ...current, showOverlayStyle: !current.showOverlayStyle }))}
-                title="Overlay style"
-              >
-                ◌
-              </button>
-            ) : null
-          }
+          onClose={() => setWorkspace((current) => ({ ...current, showOverlays: false, showOverlayStyle: false }))}
         >
-          <div className="workspace-list">
-            {selectedOverlay ? (
-              <div className="workspace-panel__subtle" style={{ padding: "0 0 12px" }}>
-                Visible chunks {runtimeStats.visibleChunkCount} · Cache {runtimeStats.cacheSize} · In flight {runtimeStats.inflightChunkCount} · Loaded features {runtimeStats.loadedFeatureCount}
-                {overlayManifest?.artifact && Object.keys(overlayManifest.artifact).length > 0 ? ` · ${String(overlayManifest.artifact.layout ?? "artifact")}` : ""}
-              </div>
-            ) : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {overlaySources.length === 0 ? <div className="workspace-empty">No overlay exposures registered.</div> : null}
-            {overlaySources.map((overlay) => (
-              <button
-                key={overlay.id}
-                type="button"
-                className={workspace.selectedOverlayId === overlay.id ? "is-active" : undefined}
-                onClick={() =>
-                  setWorkspace((current) => ({
-                    ...current,
-                    selectedOverlayId: current.selectedOverlayId === overlay.id ? null : overlay.id,
-                    showOverlayStyle: current.selectedOverlayId === overlay.id ? false : true
-                  }))
-                }
-              >
-                <strong>{overlay.name}</strong>
-                <div className="workspace-panel__subtle">
-                  {overlay.kind} · {overlay.featureCount} features
+            {overlaySources.map((overlay) => {
+              const isActive = workspace.activeOverlayIds.includes(overlay.id);
+              const isVisible = workspace.overlayVisibility[overlay.id] !== false;
+              const isFocused = workspace.focusedOverlayId === overlay.id;
+              const runtime = overlayRuntimesByKey[overlay.id];
+              return (
+                <div
+                  key={overlay.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "stretch",
+                    border: `1px solid ${isActive ? "var(--celnight-accent)" : "rgba(255,255,255,0.85)"}`,
+                    background: isActive ? "var(--celnight-accent-soft)" : "rgba(255,255,255,0.02)"
+                  }}
+                >
+                  {/* Main clickable area — uses workspace-layer-main to avoid width:100% from workspace-list rule */}
+                  <button
+                    type="button"
+                    className="workspace-layer-main"
+                    style={{ flex: 1, padding: "10px 12px" }}
+                    onClick={() => toggleOverlayActive(overlay.id)}
+                  >
+                    <strong>{sanitizeOverlayLabel(overlay.name)}</strong>
+                    <div className="workspace-panel__subtle">
+                      {overlay.kind} · {overlay.featureCount} features
+                    </div>
+                    {runtime && isActive ? (
+                      <div className="workspace-panel__subtle">
+                        {runtime.stats.mode} · {runtime.stats.loadedChunkCount}/{runtime.stats.visibleChunkCount} chunks
+                        {runtime.stats.inflightChunkCount > 0 ? ` · ${runtime.stats.inflightChunkCount} loading` : ""}
+                      </div>
+                    ) : null}
+                  </button>
+                  {/* Per-overlay actions — vertical stack so they don't interfere with main text */}
+                  {isActive ? (
+                    <div style={{ display: "flex", flexDirection: "column", borderLeft: "1px solid rgba(255,255,255,0.12)" }}>
+                      <button
+                        type="button"
+                        title={isVisible ? "Hide overlay" : "Show overlay"}
+                        onClick={() => toggleOverlayVisibility(overlay.id)}
+                        style={{
+                          flex: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 10px",
+                          background: "transparent",
+                          border: "none",
+                          borderBottom: "1px solid rgba(255,255,255,0.12)",
+                          color: isVisible ? "inherit" : "rgba(255,255,255,0.35)",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {isVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        title="Overlay style"
+                        onClick={() => focusOverlayStyle(overlay.id)}
+                        style={{
+                          flex: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 10px",
+                          background: isFocused && workspace.showOverlayStyle ? "rgba(255,255,255,0.08)" : "transparent",
+                          border: "none",
+                          color: "inherit",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <Palette size={14} />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </FloatingPanelFrame>
       ) : null}
-      {workspace.showOverlayStyle && selectedOverlay ? (
+      {workspace.showOverlayStyle && focusedOverlaySource && focusedRuntimeData ? (
         <OverlayStylePanel
-          overlay={selectedOverlay}
-          features={rawOverlayFeatures}
-          styles={overlayStyles}
+          overlay={focusedOverlaySource}
+          features={focusedRuntimeData.features}
+          styles={overlayStylesMap[workspace.focusedOverlayId!] ?? {}}
           position={panelLayout["overlay-style"]}
           zIndex={panelLayout["overlay-style"].zIndex}
           onPositionChange={(position) => updatePanelPosition("overlay-style", position)}
           onBringToFront={() => bumpPanel("overlay-style")}
           onClose={() => setWorkspace((current) => ({ ...current, showOverlayStyle: false }))}
-          onStyleChange={(key, style) => setOverlayStyles((current) => ({ ...current, [key]: style }))}
+          onStyleChange={(key, style) =>
+            setOverlayStylesMap((current) => ({
+              ...current,
+              [workspace.focusedOverlayId!]: {
+                ...(current[workspace.focusedOverlayId!] ?? {}),
+                [key]: style
+              }
+            }))
+          }
         />
       ) : null}
       {workspace.showAnnotationEditor && selectedAnnotation ? (

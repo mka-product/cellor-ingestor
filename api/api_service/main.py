@@ -14,12 +14,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.api_service.infrastructure.bootstrap import Container
 from api.api_service.infrastructure.ingestion_runtime import InProcessIngestionRuntime
+from api.api_service.infrastructure.overlay_runtime import InProcessOverlayIngestionRuntime
 from api.api_service.interfaces.http.routes import router
 from api.api_service.observability.logging import configure_logging
 
 configure_logging()
 container = Container()
 ingestion_runtime = InProcessIngestionRuntime(container)
+overlay_ingestion_runtime = InProcessOverlayIngestionRuntime(container)
 
 app = FastAPI(title="Cellor Ingestor API", version="0.1.0")
 app.add_middleware(
@@ -42,8 +44,10 @@ def start_ingestion_runtime() -> None:
     if os.environ.get("ENABLE_IN_PROCESS_INGESTION", "true").lower() != "true":
         return
     ingestion_runtime.start()
+    overlay_ingestion_runtime.start()
 
 
 @app.on_event("shutdown")
 def stop_ingestion_runtime() -> None:
     ingestion_runtime.stop()
+    overlay_ingestion_runtime.stop()

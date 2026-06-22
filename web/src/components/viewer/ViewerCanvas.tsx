@@ -12,12 +12,15 @@ import { buildTileGroupUrl, fetchTileGroup, fetchTileIndex } from "../../infrast
 import type { AnnotationBooleanMode } from "../../viewer/annotationBoolean";
 import { sanitizeAnnotationFeature } from "../../viewer/annotationGeometry";
 import { selectLevel } from "../../viewer/lod";
+import { buildOverlayRenderPlan, computeOverlayLodThresholds, type OverlayRenderMode } from "../../viewer/overlayLod";
 import type { OverlayWindow } from "../../viewer/overlayManifest";
 import { createOverlayLayers } from "../../viewer/overlayLayers";
+import { sanitizeOverlayLabel } from "../../viewer/overlayStyling";
 import { TileCache } from "../../viewer/tileCache";
 import { createBitmapLayers } from "../../viewer/tileBitmapLayers";
 import { createAnnotationEditorLayer } from "./AnnotationEditorLayer";
 import { useBufferedFeatureCollection } from "./useBufferedFeatureCollection";
+import type { EditableGeoJsonFeatureCollection, EditableGeoJsonFeature } from "./useBufferedFeatureCollection";
 import {
   DEFAULT_VIEWER_SIZE,
   MINIMAP_WIDTH,
@@ -32,16 +35,23 @@ import {
 import { MiniMap } from "./MiniMap";
 import { ScaleBar } from "./ScaleBar";
 
+export type OverlayGroup = {
+  id: string;
+  features: OverlayFeature[];
+  /** Precomputed representation mode from the chunk runtime — skips frontend LOD computation. */
+  runtimeMode: OverlayRenderMode | null;
+};
+
 type Props = {
   manifest: ViewerManifest;
-  overlayFeatures: OverlayFeature[];
+  initialViewport?: { cx: number; cy: number; zoom: number } | null;
+  overlayGroups: OverlayGroup[];
   annotationLayers: AnnotationLayer[];
   annotations: AnnotationFeature[];
   tool: string;
   annotationOperation: AnnotationBooleanMode;
   activeLayerId: string | null;
   selectedAnnotationId: string | null;
-  onSelectOverlay: (overlayId: string | null) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onPersistAnnotations: (features: AnnotationFeature[]) => void;
   remotePresence?: Array<{
@@ -88,8 +98,8 @@ type RenderLevelState = {
 
 type RenderableImage = HTMLImageElement;
 
-const OVERSCAN_TILES = 1;
-const TILE_CACHE_CAPACITY = 320;
+const OVERSCAN_TILES = 2;
+const TILE_CACHE_CAPACITY = 1024;
 const VIEW = new OrthographicView({ id: "wsi-view" });
 
 function cursorForTool(tool: string, isDragging: boolean): string {
@@ -225,6 +235,23 @@ function formatPhysicalDistanceFromPixels(pixelDistance: number, micronsPerPixel
   return `Distance: ${microns.toFixed(0)} μm`;
 }
 
+function overlayTooltip(info: { object?: { name?: string; properties?: Record<string, unknown> } | null; layer?: { id?: string } | null }) {
+  if (!info.object || !info.layer?.id?.includes("overlay-")) {
+    return null;
+  }
+  const properties = info.object.properties ?? {};
+  const isHeatmap = Boolean(properties.isHeatmap);
+  const lines = [
+    isHeatmap
+      ? (properties.class != null ? `${sanitizeOverlayLabel(String(properties.class))} — density cell` : "Density cell")
+      : (typeof info.object.name === "string" ? sanitizeOverlayLabel(info.object.name) : null),
+    !isHeatmap && properties.class != null ? `Class: ${sanitizeOverlayLabel(String(properties.class))}` : null,
+    typeof properties.score === "number" ? `Score: ${properties.score.toFixed(3)}` : null,
+    typeof properties.count === "number" ? `${isHeatmap ? "Features" : "Count"}: ${properties.count}` : null
+  ].filter((line): line is string => Boolean(line));
+  return lines.length > 0 ? { text: lines.join("\n") } : null;
+}
+
 function formatPresenceMagnification(manifest: ViewerManifest, zoom: number): string {
   const scale = 2 ** zoom;
   const objectivePower = manifest.metadata?.objectivePower;
@@ -241,11 +268,27 @@ export function ViewerCanvas(props: Props) {
   const tileCacheRef = useRef(new TileCache<RenderableImage>(TILE_CACHE_CAPACITY));
   const groupCacheRef = useRef(new Map<string, Promise<ArrayBuffer>>());
   const pendingTileRef = useRef(new Map<string, Promise<void>>());
+  const lastViewportStatsRef = useRef<string | null>(null);
+  const lastVisibleWindowRef = useRef<string | null>(null);
+  const lastPresencePayloadRef = useRef<string | null>(null);
   const scaleBarDraggedRef = useRef(false);
   const rotationDragRef = useRef<{ pointerId: number; startX: number; startRotation: number } | null>(null);
   const lastPresencePointerRef = useRef<{ x: number; y: number; slideX: number; slideY: number } | null>(null);
+  // Tracks the last rendered slideId so the viewport effect can distinguish a real slide
+  // switch from a React StrictMode double-invoke (same slide, new object reference).
+  const lastSlideIdRef = useRef<string | null>(null);
   const [viewerSize, setViewerSize] = useState<ViewerSize>(DEFAULT_VIEWER_SIZE);
-  const [viewState, setViewState] = useState<ViewState>(createInitialViewState(manifest, DEFAULT_VIEWER_SIZE));
+  // Stable ref so the manifest-only viewState effect can read the current viewerSize
+  // without depending on it (we don't want a resize to reset the viewport position).
+  const viewerSizeRef = useRef(viewerSize);
+  viewerSizeRef.current = viewerSize;
+  const [viewState, setViewState] = useState<ViewState>(() => {
+    const iv = props.initialViewport;
+    if (iv && isFinite(iv.cx) && isFinite(iv.cy) && isFinite(iv.zoom)) {
+      return { target: [iv.cx, iv.cy, 0] as [number, number, number], zoom: iv.zoom, rotationOrbit: 0 };
+    }
+    return createInitialViewState(manifest, DEFAULT_VIEWER_SIZE);
+  });
   const [status, setStatus] = useState("loading");
   const [indexRevision, setIndexRevision] = useState(0);
   const [tileRevision, setTileRevision] = useState(0);
@@ -262,8 +305,8 @@ export function ViewerCanvas(props: Props) {
   const zoomOutViewer = () => setViewState((current) => ({ ...current, zoom: Math.max(current.zoom - 0.5, -10) }));
 
   useEffect(() => {
-    const nextCollection = {
-      type: "FeatureCollection",
+    const nextCollection: EditableGeoJsonFeatureCollection = {
+      type: "FeatureCollection" as const,
       features: props.annotations
         .map((annotation) => sanitizeAnnotationFeature(annotation))
         .filter((annotation): annotation is AnnotationFeature => annotation !== null)
@@ -279,13 +322,32 @@ export function ViewerCanvas(props: Props) {
             style: annotation.style,
             layerId: annotation.layerId
           }
-        }))
+        })) as EditableGeoJsonFeature[]
     };
     commitAnnotationCollection(nextCollection);
   }, [manifest, props.annotations]);
 
+  // Viewport reset: only on a genuine slide switch, never on resize or StrictMode double-invoke.
+  // React StrictMode in dev remounts effects with the same manifest (different object, same slideId).
+  // Comparing slideId prevents those spurious reruns from stomping the URL-restored position.
   useEffect(() => {
-    setViewState(createInitialViewState(manifest, viewerSize));
+    const slideId = manifest.slideId;
+    const isFirstLoad = lastSlideIdRef.current === null;
+    const isSlideChange = !isFirstLoad && lastSlideIdRef.current !== slideId;
+    lastSlideIdRef.current = slideId;
+
+    const iv = props.initialViewport;
+    if (isFirstLoad && iv && isFinite(iv.cx) && isFinite(iv.cy) && isFinite(iv.zoom)) {
+      setViewState({ target: [iv.cx, iv.cy, 0] as [number, number, number], zoom: iv.zoom, rotationOrbit: 0 });
+    } else if (isSlideChange) {
+      setViewState(createInitialViewState(manifest, viewerSizeRef.current));
+    }
+  // viewerSizeRef is a stable ref — intentionally excluded so resize doesn't reset the viewport.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest]);
+
+  // Tile cache reset: on manifest change OR viewer resize (tiles need re-evaluation).
+  useEffect(() => {
     setStatus("loading");
     indexCacheRef.current.clear();
     groupCacheRef.current.clear();
@@ -318,6 +380,9 @@ export function ViewerCanvas(props: Props) {
   const scale = useMemo(() => 2 ** viewState.zoom, [viewState.zoom]);
   const drawToolActive = useMemo(() => isDrawTool(props.tool), [props.tool]);
   const viewportScale = useMemo(() => Math.max(1, 1 / scale), [scale]);
+  // Derive overlay LOD thresholds from the slide's pyramid levels so the heatmap→simplified→raw
+  // ladder adapts to each slide's resolution structure rather than using hardcoded scale values.
+  const lodThresholds = useMemo(() => computeOverlayLodThresholds(manifest.levels), [manifest.levels]);
   const level = useMemo(() => selectLevel(manifest, viewportScale), [manifest, viewportScale]);
   const selectedLookup = useMemo(() => indexCacheRef.current.get(level.indexPath) ?? null, [indexRevision, level.indexPath]);
   const fallbackLevel = useMemo(() => pickFallbackLevel(manifest, level, indexCacheRef.current), [indexRevision, level, manifest]);
@@ -369,7 +434,6 @@ export function ViewerCanvas(props: Props) {
   const allVisibleTiles = useMemo(() => renderLevels.flatMap((entry) => entry.tiles), [renderLevels]);
 
   useEffect(() => {
-    const controller = new AbortController();
     const loadTile = async (tile: TileReference) => {
       const cached = tileCacheRef.current.get(tile.key);
       if (cached || pendingTileRef.current.has(tile.key)) return;
@@ -377,7 +441,7 @@ export function ViewerCanvas(props: Props) {
         const groupUrl = buildTileGroupUrl(tile.levelKey, tile.groupId);
         let groupPayload = groupCacheRef.current.get(groupUrl);
         if (!groupPayload) {
-          groupPayload = fetchTileGroup(groupUrl, controller.signal);
+          groupPayload = fetchTileGroup(groupUrl);
           groupCacheRef.current.set(groupUrl, groupPayload);
         }
         const buffer = await groupPayload;
@@ -385,9 +449,14 @@ export function ViewerCanvas(props: Props) {
         const image = await decodeTileImage(payload);
         tileCacheRef.current.set(tile.key, image);
       })()
-        .then(() => setTileRevision((current) => current + 1))
+        .then(() => {
+          setTileRevision((current) => current + 1);
+        })
         .catch(() => {
           groupCacheRef.current.delete(buildTileGroupUrl(tile.levelKey, tile.groupId));
+          window.setTimeout(() => {
+            setTileRevision((current) => current + 1);
+          }, 150);
         })
         .finally(() => {
           pendingTileRef.current.delete(tile.key);
@@ -395,7 +464,6 @@ export function ViewerCanvas(props: Props) {
       pendingTileRef.current.set(tile.key, job);
     };
     allVisibleTiles.forEach((tile) => void loadTile(tile));
-    return () => controller.abort();
   }, [allVisibleTiles]);
 
   const layerModelMatrix = useMemo(
@@ -411,12 +479,55 @@ export function ViewerCanvas(props: Props) {
     return createBitmapLayers(renderLevels, (tileKey) => tileCacheRef.current.get(tileKey), layerModelMatrix);
   }, [layerModelMatrix, renderLevels, tileRevision]) as BitmapLayer[];
 
+  // Build per-group render plans so each overlay gets its own LOD independently.
+  const overlayRenderData = useMemo(
+    () =>
+      props.overlayGroups.map((group) => ({
+        id: group.id,
+        plan: buildOverlayRenderPlan(group.features, scale, {
+          // Heatmap storage loads cluster-centroid points — force binning into grid squares
+          // regardless of zoom, because centroid points must never fall through to raw/point rendering.
+          forcedMode: group.runtimeMode === "heatmap" ? "heatmap" : null,
+          // Simplified storage is precomputed polys — pass through directly.
+          precomputedMode: group.runtimeMode === "simplified" ? "simplified" : null,
+          // Raw storage (or unknown): use pyramid-level-aware auto LOD.
+          lodThresholds
+        })
+      })),
+    [props.overlayGroups, scale, lodThresholds]
+  );
+
+  const overlayLayers = useMemo(
+    () =>
+      overlayRenderData.flatMap(({ id, plan }) =>
+        createOverlayLayers({
+          mode: plan.mode,
+          polygonOverlays: plan.features
+            .filter((f) => f.kind === "polygon")
+            .map((f) => ({ ...f, polygon: imageCoordinatesToWorld(manifest, f.geometry["coordinates"]) as number[][][] })),
+          lineOverlays: plan.features
+            .filter((f) => f.kind === "polyline")
+            .map((f) => ({ ...f, path: imageCoordinatesToWorld(manifest, f.geometry["coordinates"]) as number[][] })),
+          pointOverlays: plan.features
+            .filter((f) => f.kind === "point")
+            .map((f) => ({ ...f, position: imageCoordinatesToWorld(manifest, f.geometry["coordinates"]) as number[] })),
+          modelMatrix: layerModelMatrix,
+          namespace: id
+        })
+      ),
+    [overlayRenderData, layerModelMatrix, manifest]
+  );
+
   useEffect(() => {
-    props.onViewportStatsChange?.({
+    const payload = {
       level: level.level,
       visibleTiles: bitmapLayers.length,
       totalVisibleReferences: allVisibleTiles.length
-    });
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (lastViewportStatsRef.current === fingerprint) return;
+    lastViewportStatsRef.current = fingerprint;
+    props.onViewportStatsChange?.(payload);
   }, [allVisibleTiles.length, bitmapLayers.length, level.level, props.onViewportStatsChange]);
 
   useEffect(() => {
@@ -429,43 +540,6 @@ export function ViewerCanvas(props: Props) {
       window.removeEventListener("viewer-reset", resetViewer as EventListener);
     };
   }, [manifest, viewerSize]);
-
-  const polygonOverlays = useMemo(
-    () =>
-      props.overlayFeatures.filter((feature) => feature.kind === "polygon").map((feature) => ({
-        ...feature,
-        polygon: imageCoordinatesToWorld(manifest, feature.geometry["coordinates"]) as number[][][]
-      })),
-    [manifest, props.overlayFeatures]
-  );
-  const lineOverlays = useMemo(
-    () =>
-      props.overlayFeatures.filter((feature) => feature.kind === "polyline").map((feature) => ({
-        ...feature,
-        path: imageCoordinatesToWorld(manifest, feature.geometry["coordinates"]) as number[][]
-      })),
-    [manifest, props.overlayFeatures]
-  );
-  const pointOverlays = useMemo(
-    () =>
-      props.overlayFeatures.filter((feature) => feature.kind === "point").map((feature) => ({
-        ...feature,
-        position: imageCoordinatesToWorld(manifest, feature.geometry["coordinates"]) as number[]
-      })),
-    [manifest, props.overlayFeatures]
-  );
-
-  const overlayLayers = useMemo(
-    () =>
-      createOverlayLayers({
-        polygonOverlays,
-        lineOverlays,
-        pointOverlays,
-        modelMatrix: layerModelMatrix,
-        onSelectOverlay: props.onSelectOverlay
-      }),
-    [layerModelMatrix, lineOverlays, pointOverlays, polygonOverlays, props.onSelectOverlay]
-  );
 
   const selectedFeatureIndexes = useMemo(
     () =>
@@ -518,12 +592,15 @@ export function ViewerCanvas(props: Props) {
   const visibleWindow = useMemo(() => visibleSlideWindow(manifest, viewState, viewerSize, scale), [manifest, scale, viewState, viewerSize]);
 
   useEffect(() => {
+    const fingerprint = JSON.stringify(visibleWindow);
+    if (lastVisibleWindowRef.current === fingerprint) return;
+    lastVisibleWindowRef.current = fingerprint;
     props.onVisibleWindowChange?.(visibleWindow);
   }, [props.onVisibleWindowChange, visibleWindow]);
 
   useEffect(() => {
     const pointer = lastPresencePointerRef.current;
-    props.onPresenceUpdate?.({
+    const payload = {
       x: pointer?.x ?? 0.5,
       y: pointer?.y ?? 0.5,
       zoom: viewState.zoom,
@@ -532,7 +609,11 @@ export function ViewerCanvas(props: Props) {
       viewport: visibleWindow,
       centerX: viewState.target[0],
       centerY: worldToTopDownY(manifest.height, viewState.target[1]),
-    });
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (lastPresencePayloadRef.current === fingerprint) return;
+    lastPresencePayloadRef.current = fingerprint;
+    props.onPresenceUpdate?.(payload);
   }, [manifest.height, props.onPresenceUpdate, viewState.target, viewState.zoom, visibleWindow]);
 
   const minimapHeight = useMemo(() => Math.round((MINIMAP_WIDTH * manifest.height) / manifest.width), [manifest.height, manifest.width]);
@@ -610,43 +691,43 @@ export function ViewerCanvas(props: Props) {
     <div
       ref={containerRef}
       className="workspace-canvas"
-      onPointerMove={(event) => {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect || !props.onPresenceUpdate) return;
-        const x = (event.clientX - rect.left) / Math.max(1, rect.width);
-        const y = (event.clientY - rect.top) / Math.max(1, rect.height);
-        const normalizedX = Math.max(0, Math.min(1, x));
-        const normalizedY = Math.max(0, Math.min(1, y));
-        const slideX = visibleWindow.left + normalizedX * (visibleWindow.right - visibleWindow.left);
-        const slideY = visibleWindow.top + normalizedY * (visibleWindow.bottom - visibleWindow.top);
-        lastPresencePointerRef.current = { x: normalizedX, y: normalizedY, slideX, slideY };
-        props.onPresenceUpdate({
-          x: normalizedX,
-          y: normalizedY,
-          zoom: viewState.zoom,
-          slideX,
-          slideY,
-          viewport: visibleWindow,
-          centerX: viewState.target[0],
-          centerY: worldToTopDownY(manifest.height, viewState.target[1])
-        });
-      }}
     >
       <DeckGL
         controller={drawToolActive ? false : { dragPan: true, touchRotate: false, scrollZoom: { speed: 0.01 }, doubleClickZoom: true, keyboard: true }}
         getCursor={({ isDragging }) => cursorForTool(props.tool, isDragging)}
-        layers={[...bitmapLayers, ...overlayLayers, editableLayer]}
+        getTooltip={overlayTooltip}
+        onHover={(info) => {
+          if (!props.onPresenceUpdate) return;
+          const size = viewerSizeRef.current;
+          const normalizedX = Math.max(0, Math.min(1, info.x / Math.max(1, size.width)));
+          const normalizedY = Math.max(0, Math.min(1, info.y / Math.max(1, size.height)));
+          const slideX = visibleWindow.left + normalizedX * (visibleWindow.right - visibleWindow.left);
+          const slideY = visibleWindow.top + normalizedY * (visibleWindow.bottom - visibleWindow.top);
+          lastPresencePointerRef.current = { x: normalizedX, y: normalizedY, slideX, slideY };
+          props.onPresenceUpdate({
+            x: normalizedX,
+            y: normalizedY,
+            zoom: viewState.zoom,
+            slideX,
+            slideY,
+            viewport: visibleWindow,
+            centerX: viewState.target[0],
+            centerY: worldToTopDownY(manifest.height, viewState.target[1])
+          });
+        }}
+        layers={[...bitmapLayers, ...overlayLayers, editableLayer] as any}
         views={VIEW}
         viewState={viewState}
         onViewStateChange={drawToolActive ? undefined : ({ viewState: next }) => {
-          const zoom = typeof next.zoom === "number" ? next.zoom : viewState.zoom;
-          const target: [number, number, number] = Array.isArray(next.target)
-            ? [Number(next.target[0] ?? viewState.target[0]), Number(next.target[1] ?? viewState.target[1]), 0]
+          const deckViewState = next as Partial<ViewState> & { target?: unknown };
+          const zoom = typeof deckViewState.zoom === "number" ? deckViewState.zoom : viewState.zoom;
+          const target: [number, number, number] = Array.isArray(deckViewState.target)
+            ? [Number(deckViewState.target[0] ?? viewState.target[0]), Number(deckViewState.target[1] ?? viewState.target[1]), 0]
             : viewState.target;
           setViewState({
             target,
             zoom,
-            rotationOrbit: typeof next.rotationOrbit === "number" ? next.rotationOrbit : viewState.rotationOrbit
+            rotationOrbit: typeof deckViewState.rotationOrbit === "number" ? deckViewState.rotationOrbit : viewState.rotationOrbit
           });
         }}
         style={{ position: "absolute", inset: "0" }}

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pyarrow.parquet as pq
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
@@ -94,16 +95,44 @@ def _decode_geometry_cell(cell: Any) -> BaseGeometry:
 
 
 def _parse_geoparquet(path: Path, name: str) -> ParsedOverlay:
-    table = pq.read_table(path)
-    column_names = table.column_names
-    geometry_column = next((candidate for candidate in ("geometry", "geom", "wkb_geometry") if candidate in column_names), None)
-    if geometry_column is None:
-        raise ValueError("geoparquet overlay missing geometry column")
+    try:
+        table = pq.read_table(path)
+        rows = table.to_pylist()
+        column_names = table.column_names
+        geometry_column = next((candidate for candidate in ("geometry", "geom", "wkb_geometry") if candidate in column_names), None)
+        if geometry_column is None:
+            raise ValueError("geoparquet overlay missing geometry column")
+        geometry_values = table[geometry_column].to_pylist()
+        return _build_geoparquet_overlay(rows, geometry_values, geometry_column, name)
+    except Exception:
+        return _parse_geoparquet_duckdb(path, name)
+
+
+def _parse_geoparquet_duckdb(path: Path, name: str) -> ParsedOverlay:
+    escaped_path = str(path).replace("'", "''")
+    connection = duckdb.connect()
+    try:
+        cursor = connection.execute(f"select * from read_parquet('{escaped_path}')")
+        column_names = [column[0] for column in cursor.description]
+        geometry_column = next((candidate for candidate in ("geometry", "geom", "wkb_geometry") if candidate in column_names), None)
+        if geometry_column is None:
+            raise ValueError("geoparquet overlay missing geometry column")
+        rows = [dict(zip(column_names, row)) for row in cursor.fetchall()]
+        geometry_values = [row[geometry_column] for row in rows]
+        return _build_geoparquet_overlay(rows, geometry_values, geometry_column, name)
+    finally:
+        connection.close()
+
+
+def _build_geoparquet_overlay(
+    rows: list[dict[str, Any]],
+    geometry_values: list[Any],
+    geometry_column: str,
+    name: str,
+) -> ParsedOverlay:
     features: list[OverlayFeature] = []
     legend_keys: set[str] = set()
     legend: list[dict[str, Any]] = []
-    geometry_values = table[geometry_column].to_pylist()
-    rows = table.to_pylist()
     for index, row in enumerate(rows):
         geom = _decode_geometry_cell(geometry_values[index])
         geometry = json.loads(json.dumps(geom.__geo_interface__))

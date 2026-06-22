@@ -12,7 +12,7 @@ export type ViewState = {
 };
 
 export const DEFAULT_VIEWER_SIZE: ViewerSize = { width: 1280, height: 800 };
-export const MINIMAP_WIDTH = 200;
+export const MINIMAP_WIDTH = 150;
 
 export function topDownToWorldY(manifestHeight: number, value: number): number {
   return value;
@@ -25,6 +25,10 @@ export function worldToTopDownY(manifestHeight: number, value: number): number {
 export function fitZoom(manifest: ViewerManifest, size: ViewerSize): number {
   const scale = Math.min(size.width / manifest.width, size.height / manifest.height);
   return Math.log2(Math.max(scale, 1 / 4096));
+}
+
+export function nativeZoomForLevel(level: ViewerLevel): number {
+  return Math.log2(1 / Math.max(level.downsample, 1 / 4096));
 }
 
 export function createInitialViewState(manifest: ViewerManifest, size: ViewerSize): ViewState {

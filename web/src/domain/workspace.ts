@@ -12,6 +12,7 @@ export type OverlayClassStyle = {
   color: string;
   opacity: number;
   strokeWidth: number;
+  hidden?: boolean;
 };
 
 export type OverlayFeature = {
@@ -29,6 +30,15 @@ export type OverlayChunkSummary = {
   bounds: [number, number, number, number];
   featureCount: number;
   path: string;
+  representations?: Partial<
+    Record<
+      "raw" | "simplified" | "cluster",
+      {
+        path: string;
+        featureCount: number;
+      }
+    >
+  >;
 };
 
 export type OverlayManifest = {
@@ -41,6 +51,7 @@ export type OverlayManifest = {
   sourceFormat: string;
   coordinateSpace: Record<string, unknown>;
   runtimeFormat: string;
+  artifact?: Record<string, unknown>;
   featureCount: number;
   bounds: [number, number, number, number];
   legend: Array<Record<string, unknown>>;
@@ -123,7 +134,12 @@ export type ViewerWorkspaceState = {
   showAnnotations: boolean;
   showHelp: boolean;
   isFullscreen: boolean;
-  selectedOverlayId: string | null;
+  /** Ordered list of overlay IDs that are currently loaded and rendering. */
+  activeOverlayIds: string[];
+  /** Per-overlay visibility toggle — false hides rendering without unloading chunks. */
+  overlayVisibility: Record<string, boolean>;
+  /** Which overlay's style panel is currently open. */
+  focusedOverlayId: string | null;
   selectedAnnotationId: string | null;
   activeLayerId: string | null;
   showComments: boolean;

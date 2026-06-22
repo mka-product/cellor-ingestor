@@ -31,7 +31,6 @@ export class OverlayChunkCache<T> {
       this.items.delete(key);
     }
     this.items.set(key, value);
-    this.prune(new Set());
   }
 
   prune(retainedKeys: Set<string>): void {

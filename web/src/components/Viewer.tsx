@@ -4,8 +4,18 @@ export { tileBounds, visibleSlideWindow } from "./viewer/viewerMath";
 
 type Props = {
   manifest: ViewerManifest;
+  initialViewport?: { cx: number; cy: number; zoom: number } | null;
+  initialAnnotationId?: string | null;
+  initialOverlayIds?: string[];
 };
 
-export function Viewer({ manifest }: Props) {
-  return <ViewerWorkspace manifest={manifest} />;
+export function Viewer({ manifest, initialViewport, initialAnnotationId, initialOverlayIds }: Props) {
+  return (
+    <ViewerWorkspace
+      manifest={manifest}
+      initialViewport={initialViewport}
+      initialAnnotationId={initialAnnotationId}
+      initialOverlayIds={initialOverlayIds}
+    />
+  );
 }

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect, status
@@ -92,6 +93,21 @@ def _normalize_slide_payload(slide: dict[str, object]) -> dict[str, object]:
     return payload
 
 
+def _normalize_overlay_job_payload(job: dict[str, object]) -> dict[str, object]:
+    payload = dict(job)
+    filename = str(payload.get("filename", "overlay"))
+    stem = Path(filename).stem or "overlay"
+    payload.setdefault("name", stem)
+    payload.setdefault("source_format", "geojson")
+    payload.setdefault("status", "pending")
+    payload.setdefault("stage", "queued")
+    payload.setdefault("progress_percent", 0.0)
+    payload.setdefault("feature_count", 0)
+    payload.setdefault("metrics", {})
+    payload.setdefault("artifact", {})
+    return payload
+
+
 def get_container() -> Container:
     from api.api_service.main import container
 
@@ -102,6 +118,12 @@ def get_ingestion_runtime():
     from api.api_service.main import ingestion_runtime
 
     return ingestion_runtime
+
+
+def get_overlay_ingestion_runtime():
+    from api.api_service.main import overlay_ingestion_runtime
+
+    return overlay_ingestion_runtime
 
 
 @router.post("/uploads/initiate", response_model=UploadInitiationResponse)
@@ -130,10 +152,16 @@ def complete_upload(payload: CompleteUploadRequest, container: Container = Depen
 @router.get("/slides/{slide_id}", response_model=SlideResponse)
 def get_slide(slide_id: str, container: Container = Depends(get_container)) -> SlideResponse:
     try:
-        result = container.catalog_service.get_slide(slide_id)
+        slide = _normalize_slide_payload(container.catalog.get_slide(slide_id))
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    return SlideResponse(**result.__dict__)
+    manifest_path = slide.get("manifest_path")
+    return SlideResponse(
+        slide_id=str(slide["slide_id"]),
+        version_id=str(slide["version_id"]),
+        checksum=str(slide.get("checksum", "")),
+        manifest_path=container.minio_proxy.proxy_url(str(manifest_path)) if manifest_path else None,
+    )
 
 
 @router.get("/slides/{slide_id}/versions/{version_id}/manifest", response_model=ManifestResponse)
@@ -238,7 +266,7 @@ async def upload_slide_file(
 
 @router.get("/overlay-jobs", response_model=list[OverlayUploadResponse])
 def list_overlay_jobs(container: Container = Depends(get_container)) -> list[OverlayUploadResponse]:
-    return [OverlayUploadResponse(**payload) for payload in container.overlay_ingestion_service.list_jobs()]
+    return [OverlayUploadResponse(**_normalize_overlay_job_payload(payload)) for payload in container.overlay_ingestion_service.list_jobs()]
 
 
 @router.get("/overlay-jobs/{job_id}", response_model=OverlayUploadResponse)
@@ -247,7 +275,7 @@ def get_overlay_job(job_id: str, container: Container = Depends(get_container)) 
         job = container.overlay_ingestion_service.get_job(job_id)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    return OverlayUploadResponse(**job)
+    return OverlayUploadResponse(**_normalize_overlay_job_payload(job))
 
 
 @router.get("/readers", response_model=list[AvailableReader])
@@ -329,10 +357,11 @@ def get_overlay_chunk(
     slide_id: str,
     overlay_id: str,
     chunk_id: str,
+    representation: Optional[str] = None,
     container: Container = Depends(get_container),
 ) -> OverlayChunkResponse:
     try:
-        payload = container.overlay_service.get_overlay_chunk(slide_id, overlay_id, chunk_id)
+        payload = container.overlay_service.get_overlay_chunk(slide_id, overlay_id, chunk_id, representation=representation)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return OverlayChunkResponse(**payload)
@@ -348,13 +377,24 @@ async def upload_overlay_file(
 ) -> OverlayUploadResponse:
     payload = await file.read()
     try:
-        result = container.overlay_ingestion_service.ingest_upload(
-            slide_id=slide_id,
-            filename=file.filename or "overlay.bin",
-            source_format=source_format,
-            payload=payload,
-            display_name=display_name,
-        )
+        runtime = get_overlay_ingestion_runtime()
+        if runtime.is_running():
+            result = container.overlay_ingestion_service.stage_upload(
+                slide_id=slide_id,
+                filename=file.filename or "overlay.bin",
+                source_format=source_format,
+                payload=payload,
+                display_name=display_name,
+            )
+            runtime.enqueue(result)
+        else:
+            result = container.overlay_ingestion_service.ingest_upload(
+                slide_id=slide_id,
+                filename=file.filename or "overlay.bin",
+                source_format=source_format,
+                payload=payload,
+                display_name=display_name,
+            )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return OverlayUploadResponse(**result)
