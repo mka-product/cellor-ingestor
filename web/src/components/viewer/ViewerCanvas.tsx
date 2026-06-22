@@ -591,6 +591,40 @@ export function ViewerCanvas(props: Props) {
 
   const visibleWindow = useMemo(() => visibleSlideWindow(manifest, viewState, viewerSize, scale), [manifest, scale, viewState, viewerSize]);
 
+  // Always-current snapshot for the native pointer listener below (avoids stale closures).
+  const presenceDepsRef = useRef({ onPresenceUpdate: props.onPresenceUpdate, visibleWindow, viewState, manifest });
+  presenceDepsRef.current = { onPresenceUpdate: props.onPresenceUpdate, visibleWindow, viewState, manifest };
+
+  // Capture-phase pointermove so DeckGL's bubble-phase stopPropagation never blocks us.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handler = (event: PointerEvent) => {
+      const { onPresenceUpdate, visibleWindow: vw, viewState: vs, manifest: m } = presenceDepsRef.current;
+      if (!onPresenceUpdate) return;
+      const rect = container.getBoundingClientRect();
+      const size = viewerSizeRef.current;
+      const normalizedX = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, size.width)));
+      const normalizedY = Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, size.height)));
+      const slideX = vw.left + normalizedX * (vw.right - vw.left);
+      const slideY = vw.top + normalizedY * (vw.bottom - vw.top);
+      lastPresencePointerRef.current = { x: normalizedX, y: normalizedY, slideX, slideY };
+      onPresenceUpdate({
+        x: normalizedX,
+        y: normalizedY,
+        zoom: vs.zoom,
+        slideX,
+        slideY,
+        viewport: vw,
+        centerX: vs.target[0],
+        centerY: worldToTopDownY(m.height, vs.target[1])
+      });
+    };
+    container.addEventListener("pointermove", handler, { capture: true });
+    return () => container.removeEventListener("pointermove", handler, { capture: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const fingerprint = JSON.stringify(visibleWindow);
     if (lastVisibleWindowRef.current === fingerprint) return;
@@ -696,25 +730,6 @@ export function ViewerCanvas(props: Props) {
         controller={drawToolActive ? false : { dragPan: true, touchRotate: false, scrollZoom: { speed: 0.01 }, doubleClickZoom: true, keyboard: true }}
         getCursor={({ isDragging }) => cursorForTool(props.tool, isDragging)}
         getTooltip={overlayTooltip}
-        onHover={(info) => {
-          if (!props.onPresenceUpdate) return;
-          const size = viewerSizeRef.current;
-          const normalizedX = Math.max(0, Math.min(1, info.x / Math.max(1, size.width)));
-          const normalizedY = Math.max(0, Math.min(1, info.y / Math.max(1, size.height)));
-          const slideX = visibleWindow.left + normalizedX * (visibleWindow.right - visibleWindow.left);
-          const slideY = visibleWindow.top + normalizedY * (visibleWindow.bottom - visibleWindow.top);
-          lastPresencePointerRef.current = { x: normalizedX, y: normalizedY, slideX, slideY };
-          props.onPresenceUpdate({
-            x: normalizedX,
-            y: normalizedY,
-            zoom: viewState.zoom,
-            slideX,
-            slideY,
-            viewport: visibleWindow,
-            centerX: viewState.target[0],
-            centerY: worldToTopDownY(manifest.height, viewState.target[1])
-          });
-        }}
         layers={[...bitmapLayers, ...overlayLayers, editableLayer] as any}
         views={VIEW}
         viewState={viewState}
