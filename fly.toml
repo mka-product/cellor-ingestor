@@ -1,0 +1,33 @@
+app = "cellor-api"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  STATE_BACKEND = "object_store"
+  MINIO_ENDPOINT = "s3.eu-central-003.backblazeb2.com"
+  MINIO_SECURE = "true"
+  STATIC_DIR = "/app/web/dist"
+  CORS_ORIGINS = ""
+  ENABLE_IN_PROCESS_INGESTION = "false"
+  SUPABASE_JWKS_URL = "https://ncjywndaumhehfmrqfuq.supabase.co/auth/v1/.well-known/jwks.json"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

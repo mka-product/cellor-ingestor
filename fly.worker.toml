@@ -1,0 +1,16 @@
+app = "cellor-worker"
+primary_region = "fra"
+
+[build]
+  dockerfile = "worker/Dockerfile"
+
+[env]
+  STATE_BACKEND = "object_store"
+  MINIO_ENDPOINT = "s3.eu-central-003.backblazeb2.com"
+  MINIO_SECURE = "true"
+  DAEMON_POLL_INTERVAL = "30"
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2
