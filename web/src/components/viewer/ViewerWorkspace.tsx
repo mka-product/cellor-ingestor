@@ -62,6 +62,7 @@ type Props = {
   initialAnnotationId?: string | null;
   initialOverlayIds?: string[];
   userId?: string;
+  displayName?: string;
   accessToken?: string;
 };
 
@@ -158,7 +159,7 @@ function flattenThread(comments: AnnotationComment[]) {
   return roots.map((comment) => ({ comment, replies: repliesByParent.get(comment.id) ?? [] }));
 }
 
-export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId, initialOverlayIds, userId, accessToken }: Props) {
+export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId, initialOverlayIds, userId, displayName, accessToken }: Props) {
   const workspaceRef = useRef<HTMLElement | null>(null);
   const annotationsRef = useRef<AnnotationFeature[]>([]);
   const queuedPersistRef = useRef<{ next: AnnotationFeature[]; previous: AnnotationFeature[] } | null>(null);
@@ -191,6 +192,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
   const [remotePresence, setRemotePresence] = useState<
     Array<{
       userId: string;
+      displayName?: string;
       x: number;
       y: number;
       zoom: number;
@@ -419,7 +421,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
       setPresenceStatus("connected");
       const pending = lastPresencePayloadRef.current;
       if (pending) {
-        socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, ...pending }));
+        socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, displayName: displayName ?? localPresenceId, ...pending }));
       }
     };
     socket.onerror = () => {
@@ -430,6 +432,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
         const payload = JSON.parse(event.data) as {
           type: string;
           userId?: string;
+          displayName?: string;
           x?: number;
           y?: number;
           zoom?: number;
@@ -445,6 +448,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
           const next = current.filter((entry) => entry.userId !== remoteUserId);
           next.push({
             userId: remoteUserId,
+            displayName: payload.displayName,
             x: payload.x ?? 0.5,
             y: payload.y ?? 0.5,
             zoom: payload.zoom ?? 0,
@@ -646,7 +650,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
       if (presenceEnabled) {
         const socket = presenceSocketRef.current;
         if (socket && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, ...payload }));
+          socket.send(JSON.stringify({ type: "presence.cursor", userId: localPresenceId, displayName: displayName ?? localPresenceId, ...payload }));
         }
       }
       // Debounce viewport URL update — fires 800ms after the last pan/zoom.
@@ -953,6 +957,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
         <AnnotationEditPanel
           annotation={selectedAnnotation}
           layer={selectedLayer}
+          currentUser={displayName ?? userId ?? "unknown"}
           position={panelLayout.annotation}
           zIndex={panelLayout.annotation.zIndex}
           onPositionChange={(position) => updatePanelPosition("annotation", position)}
@@ -1011,7 +1016,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
           onBringToFront={() => bumpPanel("comments")}
           onClose={() => setWorkspace((current) => ({ ...current, showComments: false }))}
           onAddComment={(body, parentId) =>
-            createComment(manifest.slideId, selectedAnnotation.id, body, "local-user", parentId).then((comment) =>
+            createComment(manifest.slideId, selectedAnnotation.id, body, displayName ?? userId ?? "unknown", parentId).then((comment) =>
               setComments((current) => [...current, comment])
             )
           }

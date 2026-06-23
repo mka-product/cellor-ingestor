@@ -15,9 +15,10 @@ type Props = {
   review: AnnotationReview | null;
   onSaveReview: (payload: { status: string; reviewer: string; note: string }) => void;
   commentCount: number;
+  currentUser?: string;
 };
 
-export function AnnotationEditPanel(props: Props) {
+export function AnnotationEditPanel({ currentUser = "unknown", ...props }: Props) {
   const style = props.annotation.style ?? {};
   return (
     <FloatingPanelFrame
@@ -128,7 +129,7 @@ export function AnnotationEditPanel(props: Props) {
             onChange={(event) =>
               props.onSaveReview({
                 status: event.target.value,
-                reviewer: props.review?.reviewer ?? "local-user",
+                reviewer: props.review?.reviewer ?? currentUser,
                 note: props.review?.note ?? ""
               })
             }
@@ -146,7 +147,7 @@ export function AnnotationEditPanel(props: Props) {
             onBlur={(event) =>
               props.onSaveReview({
                 status: props.review?.status ?? "pending",
-                reviewer: props.review?.reviewer ?? "local-user",
+                reviewer: props.review?.reviewer ?? currentUser,
                 note: event.target.value
               })
             }

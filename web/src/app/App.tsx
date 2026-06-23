@@ -225,6 +225,11 @@ export function App() {
               initialAnnotationId={initialViewerParams.annotationId}
               initialOverlayIds={initialViewerParams.overlayIds}
               userId={session.user.email ?? session.user.id}
+              displayName={
+                session.user.user_metadata?.first_name
+                  ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name ?? ""}`.trim()
+                  : (session.user.email ?? session.user.id)
+              }
               accessToken={session.access_token}
             />
           ) : null}

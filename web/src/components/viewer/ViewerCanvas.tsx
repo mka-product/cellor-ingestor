@@ -62,6 +62,7 @@ type Props = {
   onPersistAnnotations: (features: AnnotationFeature[]) => void;
   remotePresence?: Array<{
     userId: string;
+    displayName?: string;
     x: number;
     y: number;
     zoom: number;
@@ -686,6 +687,7 @@ export function ViewerCanvas(props: Props) {
         if (typeof presence.slideX !== "number" || typeof presence.slideY !== "number") {
           return {
             userId: presence.userId,
+            displayName: presence.displayName,
             zoom: presence.zoom,
             leftPercent: presence.x * 100,
             topPercent: presence.y * 100,
@@ -696,6 +698,7 @@ export function ViewerCanvas(props: Props) {
         const localY = ((presence.slideY - visibleWindow.top) / height) * 100;
         return {
           userId: presence.userId,
+          displayName: presence.displayName,
           zoom: presence.zoom,
           leftPercent: Math.max(0, Math.min(100, localX)),
           topPercent: Math.max(0, Math.min(100, localY)),
@@ -841,10 +844,10 @@ export function ViewerCanvas(props: Props) {
             key={presence.userId}
             className={`workspace-remote-cursor${presence.isOffscreen ? " is-offscreen" : ""}`}
             style={{ left: `${presence.leftPercent}%`, top: `${presence.topPercent}%`, background: color, borderColor: color }}
-            title={`${presence.userId} · ${formatPresenceMagnification(manifest, presence.zoom)}`}
+            title={`${presence.displayName ?? presence.userId} · ${formatPresenceMagnification(manifest, presence.zoom)}`}
           >
             <span className="workspace-remote-cursor__label" style={{ background: color }}>
-              {presence.userId} · {formatPresenceMagnification(manifest, presence.zoom)}
+              {presence.displayName ?? presence.userId} · {formatPresenceMagnification(manifest, presence.zoom)}
             </span>
           </div>
         );
