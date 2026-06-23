@@ -132,6 +132,31 @@ def _fail(container: ApiContainer, job: dict, message: str) -> None:
     })
 
 
+def _claim_overlay_job(container: ApiContainer, job: dict) -> bool:
+    if job.get("status") != "pending":
+        return False
+    container.catalog.upsert_overlay_job({**job, "status": "running", "stage": "starting", "message": "Worker claimed job"})
+    refreshed = container.catalog.get_overlay_job(str(job["job_id"]))
+    return refreshed.get("stage") == "starting"
+
+
+def _process_overlay_job(container: ApiContainer, job: dict) -> None:
+    job_id = str(job["job_id"])
+    logger.info("processing overlay job %s slide=%s format=%s", job_id, job.get("slide_id"), job.get("source_format"))
+    try:
+        result = container.overlay_ingestion_service.process_staged_upload(job)
+        logger.info("overlay job %s succeeded", job_id)
+    except Exception as exc:
+        logger.exception("overlay job %s failed", job_id)
+        container.catalog.upsert_overlay_job({
+            **job,
+            "status": "failed",
+            "stage": "failed",
+            "message": str(exc),
+            "progress_percent": 100.0,
+        })
+
+
 def run_daemon() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logger.info("daemon starting (poll_interval=%ss)", POLL_INTERVAL)
@@ -143,6 +168,12 @@ def run_daemon() -> None:
             for job in pending:
                 if _claim_job(container, job):
                     _process_job(container, job)
+
+            overlay_jobs = container.catalog.list_overlay_jobs()
+            pending_overlays = [j for j in overlay_jobs if j.get("status") == "pending"]
+            for job in pending_overlays:
+                if _claim_overlay_job(container, job):
+                    _process_overlay_job(container, job)
         except Exception:
             logger.exception("poll loop error — will retry")
         time.sleep(POLL_INTERVAL)

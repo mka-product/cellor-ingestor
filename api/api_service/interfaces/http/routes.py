@@ -382,23 +382,15 @@ async def upload_overlay_file(
     payload = await file.read()
     try:
         runtime = get_overlay_ingestion_runtime()
+        result = container.overlay_ingestion_service.stage_upload(
+            slide_id=slide_id,
+            filename=file.filename or "overlay.bin",
+            source_format=source_format,
+            payload=payload,
+            display_name=display_name,
+        )
         if runtime is not None and runtime.is_running():
-            result = container.overlay_ingestion_service.stage_upload(
-                slide_id=slide_id,
-                filename=file.filename or "overlay.bin",
-                source_format=source_format,
-                payload=payload,
-                display_name=display_name,
-            )
             runtime.enqueue(result)
-        else:
-            result = container.overlay_ingestion_service.ingest_upload(
-                slide_id=slide_id,
-                filename=file.filename or "overlay.bin",
-                source_format=source_format,
-                payload=payload,
-                display_name=display_name,
-            )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return OverlayUploadResponse(**result)
