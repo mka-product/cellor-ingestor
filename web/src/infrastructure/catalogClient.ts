@@ -1,5 +1,6 @@
 import type { AvailableReader, CatalogSlide, IngestionJob, OverlayJob } from "../domain/catalog";
 import type { ViewerManifest } from "../domain/contracts";
+import { authedFetch } from "../lib/authedFetch";
 import { resolveApiOrigin, resolveApiUrl } from "./apiBase";
 
 function resolveAssetUrl(path: string | null | undefined): string | null | undefined {
@@ -33,7 +34,7 @@ function normalizeManifest(manifest: ViewerManifest): ViewerManifest {
 }
 
 export async function fetchSlides(signal?: AbortSignal): Promise<CatalogSlide[]> {
-  const response = await fetch(resolveApiUrl("/slides"), { signal });
+  const response = await authedFetch(resolveApiUrl("/slides"), { signal });
   if (!response.ok) {
     throw new Error(`slides request failed: ${response.status}`);
   }
@@ -46,7 +47,7 @@ export async function fetchSlides(signal?: AbortSignal): Promise<CatalogSlide[]>
 }
 
 export async function fetchManifestContent(slideId: string, versionId: string, signal?: AbortSignal) {
-  const response = await fetch(resolveApiUrl(`/slides/${slideId}/versions/${versionId}/manifest/content`), { signal });
+  const response = await authedFetch(resolveApiUrl(`/slides/${slideId}/versions/${versionId}/manifest/content`), { signal });
   if (!response.ok) {
     throw new Error(`manifest request failed: ${response.status}`);
   }
@@ -54,7 +55,7 @@ export async function fetchManifestContent(slideId: string, versionId: string, s
 }
 
 export async function fetchReaders(signal?: AbortSignal): Promise<AvailableReader[]> {
-  const response = await fetch(resolveApiUrl("/readers"), { signal });
+  const response = await authedFetch(resolveApiUrl("/readers"), { signal });
   if (!response.ok) {
     throw new Error(`readers request failed: ${response.status}`);
   }
@@ -62,7 +63,7 @@ export async function fetchReaders(signal?: AbortSignal): Promise<AvailableReade
 }
 
 export async function fetchJobs(signal?: AbortSignal): Promise<IngestionJob[]> {
-  const response = await fetch(resolveApiUrl("/jobs"), { signal });
+  const response = await authedFetch(resolveApiUrl("/jobs"), { signal });
   if (!response.ok) {
     throw new Error(`jobs request failed: ${response.status}`);
   }
@@ -70,14 +71,14 @@ export async function fetchJobs(signal?: AbortSignal): Promise<IngestionJob[]> {
 }
 
 export async function cancelJob(jobId: string): Promise<void> {
-  const response = await fetch(resolveApiUrl(`/jobs/${jobId}`), { method: "DELETE" });
+  const response = await authedFetch(resolveApiUrl(`/jobs/${jobId}`), { method: "DELETE" });
   if (!response.ok) {
     throw new Error(`job cancel failed: ${response.status}`);
   }
 }
 
 export async function uploadSlideFile(formData: FormData): Promise<IngestionJob> {
-  const response = await fetch(resolveApiUrl("/uploads/file"), { method: "POST", body: formData });
+  const response = await authedFetch(resolveApiUrl("/uploads/file"), { method: "POST", body: formData });
   if (!response.ok) {
     throw new Error(`slide upload failed: ${response.status}`);
   }
@@ -85,7 +86,7 @@ export async function uploadSlideFile(formData: FormData): Promise<IngestionJob>
 }
 
 export async function fetchOverlayJobs(signal?: AbortSignal): Promise<OverlayJob[]> {
-  const response = await fetch(resolveApiUrl("/overlay-jobs"), { signal });
+  const response = await authedFetch(resolveApiUrl("/overlay-jobs"), { signal });
   if (!response.ok) {
     throw new Error(`overlay jobs request failed: ${response.status}`);
   }
@@ -93,7 +94,7 @@ export async function fetchOverlayJobs(signal?: AbortSignal): Promise<OverlayJob
 }
 
 export async function uploadOverlayFile(formData: FormData): Promise<OverlayJob> {
-  const response = await fetch(resolveApiUrl("/overlay-uploads/file"), { method: "POST", body: formData });
+  const response = await authedFetch(resolveApiUrl("/overlay-uploads/file"), { method: "POST", body: formData });
   if (!response.ok) {
     throw new Error(`overlay upload failed: ${response.status}`);
   }

@@ -61,6 +61,8 @@ type Props = {
   initialViewport?: { cx: number; cy: number; zoom: number } | null;
   initialAnnotationId?: string | null;
   initialOverlayIds?: string[];
+  userId?: string;
+  accessToken?: string;
 };
 
 type PanelId = "metadata" | "layers" | "annotation" | "comments" | "overlays" | "overlay-style" | "shortcuts";
@@ -156,7 +158,7 @@ function flattenThread(comments: AnnotationComment[]) {
   return roots.map((comment) => ({ comment, replies: repliesByParent.get(comment.id) ?? [] }));
 }
 
-export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId, initialOverlayIds }: Props) {
+export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId, initialOverlayIds, userId, accessToken }: Props) {
   const workspaceRef = useRef<HTMLElement | null>(null);
   const annotationsRef = useRef<AnnotationFeature[]>([]);
   const queuedPersistRef = useRef<{ next: AnnotationFeature[]; previous: AnnotationFeature[] } | null>(null);
@@ -204,7 +206,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
   const [overlayViewportScale, setOverlayViewportScale] = useState<number>(1);
   const lodThresholds = useMemo(() => computeOverlayLodThresholds(manifest.levels), [manifest.levels]);
   const minimapHeight = Math.round((MINIMAP_WIDTH * manifest.height) / manifest.width);
-  const localPresenceId = useMemo(() => `user-${Math.random().toString(36).slice(2, 8)}`, []);
+  const localPresenceId = useMemo(() => userId ?? `user-${Math.random().toString(36).slice(2, 8)}`, [userId]);
   const presenceSocketRef = useRef<WebSocket | null>(null);
   const lastPresencePayloadRef = useRef<Record<string, unknown> | null>(null);
   const urlViewportRef = useRef<{ cx: number; cy: number; zoom: number } | null>(null);
@@ -409,7 +411,8 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
       return;
     }
     setPresenceStatus("connecting");
-    const socket = new WebSocket(resolveWebSocketUrl(`/slides/${manifest.slideId}/presence`));
+    const wsUrl = resolveWebSocketUrl(`/slides/${manifest.slideId}/presence`) + (accessToken ? `?token=${accessToken}` : "");
+    const socket = new WebSocket(wsUrl);
     presenceSocketRef.current = socket;
     socket.onopen = () => {
       if (presenceSocketRef.current !== socket) return;
@@ -468,7 +471,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
       if (presenceSocketRef.current === socket) presenceSocketRef.current = null;
       setRemotePresence([]);
     };
-  }, [localPresenceId, manifest.slideId, presenceEnabled]);
+  }, [accessToken, localPresenceId, manifest.slideId, presenceEnabled]);
 
   // Sync annotation selection and active overlays to URL immediately when they change.
   // Viewport is written separately via the debounced handler in handlePresenceUpdate.

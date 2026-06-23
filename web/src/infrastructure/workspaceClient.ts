@@ -9,6 +9,7 @@ import type {
   OverlaySource,
   SlideTag
 } from "../domain/workspace";
+import { authedFetch } from "../lib/authedFetch";
 import { resolveApiAssetUrl, resolveApiUrl } from "./apiBase";
 
 export class WorkspaceRequestError extends Error {
@@ -50,7 +51,7 @@ async function parseJson<T>(input: Promise<Response>): Promise<T> {
 }
 
 export async function fetchOverlaySources(slideId: string, signal?: AbortSignal): Promise<OverlaySource[]> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/overlays`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/overlays`), { signal }));
 }
 
 export async function fetchOverlayDetail(
@@ -68,11 +69,11 @@ export async function fetchOverlayDetail(
   features: OverlayFeature[];
   legend: Array<Record<string, unknown>>;
 }> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}`), { signal }));
 }
 
 export async function fetchOverlayManifest(slideId: string, overlayId: string, signal?: AbortSignal): Promise<OverlayManifest> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}/manifest`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}/manifest`), { signal }));
 }
 
 export async function fetchOverlayChunk(
@@ -83,15 +84,15 @@ export async function fetchOverlayChunk(
   signal?: AbortSignal
 ): Promise<OverlayChunk> {
   const query = representation ? `?representation=${representation}` : "";
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}/chunks/${chunkId}${query}`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}/chunks/${chunkId}${query}`), { signal }));
 }
 
 export async function fetchOverlayChunkAtPath(chunkPath: string, signal?: AbortSignal): Promise<OverlayChunk> {
-  return parseJson(fetch(resolveApiAssetUrl(chunkPath), { signal }));
+  return parseJson(authedFetch(resolveApiAssetUrl(chunkPath), { signal }));
 }
 
 export async function fetchAnnotationLayers(slideId: string, signal?: AbortSignal): Promise<AnnotationLayer[]> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/annotation-layers`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/annotation-layers`), { signal }));
 }
 
 export async function saveAnnotationLayer(
@@ -99,7 +100,7 @@ export async function saveAnnotationLayer(
   payload: Partial<AnnotationLayer> & Pick<AnnotationLayer, "name" | "color" | "isVisible" | "isLocked">
 ): Promise<AnnotationLayer> {
   return parseJson(
-    fetch(resolveApiUrl(`/slides/${slideId}/annotation-layers`), {
+    authedFetch(resolveApiUrl(`/slides/${slideId}/annotation-layers`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -108,14 +109,14 @@ export async function saveAnnotationLayer(
 }
 
 export async function deleteAnnotationLayer(slideId: string, layerId: string): Promise<void> {
-  const response = await fetch(resolveApiUrl(`/slides/${slideId}/annotation-layers/${layerId}`), { method: "DELETE" });
+  const response = await authedFetch(resolveApiUrl(`/slides/${slideId}/annotation-layers/${layerId}`), { method: "DELETE" });
   if (!response.ok) {
     throw new WorkspaceRequestError(response.status, await extractErrorDetail(response));
   }
 }
 
 export async function fetchAnnotations(slideId: string, signal?: AbortSignal): Promise<AnnotationFeature[]> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/annotations`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/annotations`), { signal }));
 }
 
 export async function saveAnnotation(
@@ -123,7 +124,7 @@ export async function saveAnnotation(
   payload: Partial<AnnotationFeature> & Pick<AnnotationFeature, "layerId" | "geometry" | "properties" | "style">
 ): Promise<AnnotationFeature> {
   return parseJson(
-    fetch(resolveApiUrl(`/slides/${slideId}/annotations`), {
+    authedFetch(resolveApiUrl(`/slides/${slideId}/annotations`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -132,7 +133,7 @@ export async function saveAnnotation(
 }
 
 export async function deleteAnnotation(slideId: string, annotationId: string): Promise<void> {
-  const response = await fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}`), { method: "DELETE" });
+  const response = await authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}`), { method: "DELETE" });
   if (!response.ok) {
     throw new WorkspaceRequestError(response.status, await extractErrorDetail(response));
   }
@@ -143,7 +144,7 @@ export async function fetchComments(
   annotationId: string,
   signal?: AbortSignal
 ): Promise<AnnotationComment[]> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments`), { signal }));
 }
 
 export async function createComment(
@@ -154,7 +155,7 @@ export async function createComment(
   parentId: string | null = null
 ): Promise<AnnotationComment> {
   return parseJson(
-    fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments`), {
+    authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body, author, parentId })
@@ -170,7 +171,7 @@ export async function updateComment(
   author = "local-user"
 ): Promise<AnnotationComment> {
   return parseJson(
-    fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments/${commentId}`), {
+    authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments/${commentId}`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ body, author })
@@ -179,7 +180,7 @@ export async function updateComment(
 }
 
 export async function deleteComment(slideId: string, annotationId: string, commentId: string): Promise<void> {
-  const response = await fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments/${commentId}`), {
+  const response = await authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/comments/${commentId}`), {
     method: "DELETE"
   });
   if (!response.ok) {
@@ -188,12 +189,12 @@ export async function deleteComment(slideId: string, annotationId: string, comme
 }
 
 export async function fetchTags(slideId: string, signal?: AbortSignal): Promise<SlideTag[]> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/tags`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/tags`), { signal }));
 }
 
 export async function saveTags(slideId: string, payload: SlideTag[]): Promise<SlideTag[]> {
   return parseJson(
-    fetch(resolveApiUrl(`/slides/${slideId}/tags`), {
+    authedFetch(resolveApiUrl(`/slides/${slideId}/tags`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -202,7 +203,7 @@ export async function saveTags(slideId: string, payload: SlideTag[]): Promise<Sl
 }
 
 export async function fetchReviews(slideId: string, annotationId: string, signal?: AbortSignal): Promise<AnnotationReview[]> {
-  return parseJson(fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/reviews`), { signal }));
+  return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/reviews`), { signal }));
 }
 
 export async function saveReview(
@@ -212,7 +213,7 @@ export async function saveReview(
 ): Promise<AnnotationReview> {
   const reviewId = payload.id ?? "new";
   return parseJson(
-    fetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/reviews/${reviewId}`), {
+    authedFetch(resolveApiUrl(`/slides/${slideId}/annotations/${annotationId}/reviews/${reviewId}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)

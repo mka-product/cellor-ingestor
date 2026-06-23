@@ -10,10 +10,12 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from api.api_service.auth import verify_token
 from api.api_service.infrastructure.bootstrap import Container
 from api.api_service.infrastructure.ingestion_runtime import InProcessIngestionRuntime
 from api.api_service.infrastructure.overlay_runtime import InProcessOverlayIngestionRuntime
@@ -35,6 +37,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+_PROTECTED_PREFIXES = ("/slides", "/uploads", "/overlay-uploads", "/jobs", "/overlay-jobs", "/readers")
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if not any(path.startswith(p) for p in _PROTECTED_PREFIXES):
+        return await call_next(request)
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    auth_header = request.headers.get("authorization", "")
+    token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else None
+    try:
+        verify_token(token)
+    except Exception:
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+    return await call_next(request)
+
+
 app.include_router(router)
 
 # Serve the built React frontend — mount last so API routes take precedence

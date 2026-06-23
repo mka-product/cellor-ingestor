@@ -22,3 +22,5 @@ services:
         value: /app/web/dist
       - key: CORS_ORIGINS
         value: ""  # same-origin in production — no CORS needed
+      - key: SUPABASE_JWKS_URL
+        value: https://ncjywndaumhehfmrqfuq.supabase.co/auth/v1/.well-known/jwks.json

@@ -7,15 +7,19 @@ type Props = {
   initialViewport?: { cx: number; cy: number; zoom: number } | null;
   initialAnnotationId?: string | null;
   initialOverlayIds?: string[];
+  userId?: string;
+  accessToken?: string;
 };
 
-export function Viewer({ manifest, initialViewport, initialAnnotationId, initialOverlayIds }: Props) {
+export function Viewer({ manifest, initialViewport, initialAnnotationId, initialOverlayIds, userId, accessToken }: Props) {
   return (
     <ViewerWorkspace
       manifest={manifest}
       initialViewport={initialViewport}
       initialAnnotationId={initialAnnotationId}
       initialOverlayIds={initialOverlayIds}
+      userId={userId}
+      accessToken={accessToken}
     />
   );
 }

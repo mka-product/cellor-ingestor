@@ -840,3 +840,96 @@ body {
     justify-content: flex-start;
   }
 }
+
+/* Auth */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-card {
+  background: var(--celnight-surface);
+  border: 1px solid var(--celnight-border-subtle);
+  border-radius: 12px;
+  padding: var(--celnight-space-3xl);
+  width: 100%;
+  max-width: 360px;
+  box-shadow: var(--celnight-shadow-soft);
+}
+
+.auth-logo {
+  margin: 0 0 var(--celnight-space-2xl);
+  text-align: center;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--celnight-space-lg);
+}
+
+.auth-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--celnight-space-xs);
+  font-size: var(--celnight-text-sm);
+  color: var(--celnight-text-secondary);
+  font-weight: 500;
+}
+
+.auth-input {
+  background: var(--celnight-bg-elevated);
+  border: 1px solid var(--celnight-border-subtle);
+  border-radius: 6px;
+  color: var(--celnight-text-primary);
+  font-family: var(--celnight-font-sans);
+  font-size: var(--celnight-text-md);
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.auth-input:focus {
+  border-color: var(--celnight-accent);
+}
+
+.auth-submit {
+  background: var(--celnight-accent);
+  border: none;
+  border-radius: 6px;
+  color: #030304;
+  cursor: pointer;
+  font-family: var(--celnight-font-sans);
+  font-size: var(--celnight-text-md);
+  font-weight: 600;
+  margin-top: var(--celnight-space-xs);
+  padding: 10px;
+  transition: opacity 0.15s;
+}
+
+.auth-submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.auth-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #fca5a5;
+  font-size: var(--celnight-text-sm);
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.workspace-topbar__user {
+  font-size: var(--celnight-text-sm);
+  color: var(--celnight-text-muted);
+  padding: 0 var(--celnight-space-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}

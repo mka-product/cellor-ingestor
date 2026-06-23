@@ -11,9 +11,10 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 
 from api.api_service.application.dto import CompleteUploadCommand, InitiateUploadCommand
+from api.api_service.auth import verify_token
 from api.api_service.infrastructure.bootstrap import Container
 from api.api_service.interfaces.http.schemas import (
     AnnotationLayerRequest,
@@ -559,7 +560,12 @@ def delete_comment(
 
 
 @router.websocket("/slides/{slide_id}/presence")
-async def slide_presence(slide_id: str, websocket: WebSocket) -> None:
+async def slide_presence(slide_id: str, websocket: WebSocket, token: str | None = Query(None)) -> None:
+    try:
+        verify_token(token)
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
     await websocket.accept()
     room = _presence_rooms.setdefault(slide_id, [])
     room.append(websocket)

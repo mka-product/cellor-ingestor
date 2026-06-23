@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useAuth } from "../components/auth/AuthContext";
+import { LoginPage } from "../components/auth/LoginPage";
 import { Viewer } from "../components/Viewer";
 import { OverlaysOperationsPage } from "../components/operations/OverlaysOperationsPage";
 import { SlidesOperationsPage } from "../components/operations/SlidesOperationsPage";
@@ -20,6 +22,7 @@ function parseInitialViewerParams() {
 }
 
 export function App() {
+  const { session, loading: authLoading, signOut } = useAuth();
   const [route, setRoute] = useState(() => window.location.pathname || "/");
   const [initialViewerParams] = useState(parseInitialViewerParams);
   const [slides, setSlides] = useState<CatalogSlide[]>([]);
@@ -113,6 +116,9 @@ export function App() {
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [selectedSlide]);
 
+  if (authLoading) return null;
+  if (!session) return <LoginPage />;
+
   if (status === "error") {
     return <div role="alert">Application failed to load</div>;
   }
@@ -200,6 +206,8 @@ export function App() {
           <button type="button" className={`workspace-nav${isOverlayOpsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/operations/overlays"); setRoute("/operations/overlays"); }}>
             Overlays
           </button>
+          <span className="workspace-topbar__user">{session.user.email}</span>
+          <button type="button" className="workspace-nav" onClick={signOut}>Sign out</button>
         </nav>
       </header>
       {isViewerRoute ? (
@@ -212,6 +220,8 @@ export function App() {
               initialViewport={initialViewerParams.viewport}
               initialAnnotationId={initialViewerParams.annotationId}
               initialOverlayIds={initialViewerParams.overlayIds}
+              userId={session.user.email ?? session.user.id}
+              accessToken={session.access_token}
             />
           ) : null}
         </>
