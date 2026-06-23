@@ -56,6 +56,11 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.get("/health")
+async def health() -> dict:
+    return {"status": "ok"}
+
+
 app.include_router(router)
 
 # Serve the built React frontend — mount last so API routes take precedence

@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: standard
-    healthCheckPath: /slides
+    healthCheckPath: /health
     envVars:
       - key: MINIO_ENDPOINT
         value: s3.eu-central-003.backblazeb2.com
