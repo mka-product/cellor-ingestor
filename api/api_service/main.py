@@ -10,12 +10,16 @@ import os
 import sys
 from pathlib import Path
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.api_service.auth import verify_token
+
+logger = logging.getLogger("cellor.auth")
 from api.api_service.infrastructure.bootstrap import Container
 from api.api_service.interfaces.http.routes import router
 from api.api_service.observability.logging import configure_logging
@@ -57,7 +61,8 @@ async def auth_middleware(request: Request, call_next):
     token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else None
     try:
         verify_token(token)
-    except Exception:
+    except Exception as exc:
+        logger.warning("auth rejected %s %s — token_present=%s reason=%s", request.method, path, token is not None, exc)
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     return await call_next(request)
 
