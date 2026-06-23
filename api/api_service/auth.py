@@ -33,14 +33,18 @@ def verify_token(token: str | None) -> dict:
     try:
         jwks = _load_jwks()
         header = jwt.get_unverified_header(token)
-        available_kids = [k.get("kid") for k in jwks.get("keys", [])]
         jwt_kid = header.get("kid")
-        jwt_alg = header.get("alg")
-        key_data = next((k for k in jwks["keys"] if k.get("kid") == jwt_kid), None)
+        jwt_alg = header.get("alg", "RS256")
+        key_data = next((k for k in jwks.get("keys", []) if k.get("kid") == jwt_kid), None)
         if not key_data:
-            raise ValueError(f"no matching key: jwt_kid={jwt_kid!r} alg={jwt_alg!r} jwks_kids={available_kids}")
-        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
-        return jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
+            available = [k.get("kid") for k in jwks.get("keys", [])]
+            raise ValueError(f"no matching key: jwt_kid={jwt_kid!r} alg={jwt_alg!r} jwks_kids={available}")
+        kty = key_data.get("kty", "RSA")
+        if kty == "EC":
+            public_key = jwt.algorithms.ECAlgorithm.from_jwk(key_data)
+        else:
+            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+        return jwt.decode(token, public_key, algorithms=[jwt_alg], options={"verify_aud": False})
     except HTTPException:
         raise
     except Exception as exc:
