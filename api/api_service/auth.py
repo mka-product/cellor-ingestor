@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 
 import httpx
 import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+logger = logging.getLogger("cellor.auth")
 
 _JWKS_URL: str = os.environ.get("SUPABASE_JWKS_URL", "")
 _jwks_cache: dict = {}
@@ -30,14 +33,18 @@ def verify_token(token: str | None) -> dict:
     try:
         jwks = _load_jwks()
         header = jwt.get_unverified_header(token)
-        key_data = next((k for k in jwks["keys"] if k.get("kid") == header.get("kid")), None)
+        available_kids = [k.get("kid") for k in jwks.get("keys", [])]
+        jwt_kid = header.get("kid")
+        jwt_alg = header.get("alg")
+        key_data = next((k for k in jwks["keys"] if k.get("kid") == jwt_kid), None)
         if not key_data:
-            raise ValueError("unknown signing key")
+            raise ValueError(f"no matching key: jwt_kid={jwt_kid!r} alg={jwt_alg!r} jwks_kids={available_kids}")
         public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
         return jwt.decode(token, public_key, algorithms=["RS256"], options={"verify_aud": False})
     except HTTPException:
         raise
     except Exception as exc:
+        logger.warning("token verify failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid token") from exc
 
 
