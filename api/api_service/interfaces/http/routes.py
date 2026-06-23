@@ -234,7 +234,10 @@ def cancel_job(job_id: str, container: Container = Depends(get_container)) -> Re
     if payload["status"] not in {"pending", "running"}:
         raise HTTPException(status_code=409, detail="only pending or running jobs can be cancelled")
     runtime = get_ingestion_runtime()
-    if not runtime.cancel(job_id):
+    if runtime is None:
+        # External worker — cancel by marking failed in catalog directly
+        container.catalog.upsert_job({**payload, "status": "failed", "stage": "cancelled", "message": "Cancelled by user"})
+    elif not runtime.cancel(job_id):
         raise HTTPException(status_code=409, detail="job is no longer queued")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -379,7 +382,7 @@ async def upload_overlay_file(
     payload = await file.read()
     try:
         runtime = get_overlay_ingestion_runtime()
-        if runtime.is_running():
+        if runtime is not None and runtime.is_running():
             result = container.overlay_ingestion_service.stage_upload(
                 slide_id=slide_id,
                 filename=file.filename or "overlay.bin",

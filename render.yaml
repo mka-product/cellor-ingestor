@@ -24,3 +24,27 @@ services:
         value: ""  # same-origin in production — no CORS needed
       - key: SUPABASE_JWKS_URL
         value: https://ncjywndaumhehfmrqfuq.supabase.co/auth/v1/.well-known/jwks.json
+      - key: ENABLE_IN_PROCESS_INGESTION
+        value: "false"
+
+  - type: worker
+    name: cellor-worker
+    runtime: docker
+    dockerfilePath: ./worker/Dockerfile
+    dockerContext: .
+    plan: standard
+    envVars:
+      - key: MINIO_ENDPOINT
+        value: s3.eu-central-003.backblazeb2.com
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_SECURE
+        value: "true"
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STATE_BACKEND
+        value: object_store
+      - key: DAEMON_POLL_INTERVAL
+        value: "30"

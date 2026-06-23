@@ -17,15 +17,21 @@ from fastapi.staticfiles import StaticFiles
 
 from api.api_service.auth import verify_token
 from api.api_service.infrastructure.bootstrap import Container
-from api.api_service.infrastructure.ingestion_runtime import InProcessIngestionRuntime
-from api.api_service.infrastructure.overlay_runtime import InProcessOverlayIngestionRuntime
 from api.api_service.interfaces.http.routes import router
 from api.api_service.observability.logging import configure_logging
 
 configure_logging()
 container = Container()
-ingestion_runtime = InProcessIngestionRuntime(container)
-overlay_ingestion_runtime = InProcessOverlayIngestionRuntime(container)
+
+_enable_ingestion = os.environ.get("ENABLE_IN_PROCESS_INGESTION", "true").lower() == "true"
+if _enable_ingestion:
+    from api.api_service.infrastructure.ingestion_runtime import InProcessIngestionRuntime
+    from api.api_service.infrastructure.overlay_runtime import InProcessOverlayIngestionRuntime
+    ingestion_runtime = InProcessIngestionRuntime(container)
+    overlay_ingestion_runtime = InProcessOverlayIngestionRuntime(container)
+else:
+    ingestion_runtime = None
+    overlay_ingestion_runtime = None
 
 _cors_origins = [o for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o]
 
@@ -73,13 +79,15 @@ if _static_dir and Path(_static_dir).exists():
 def start_ingestion_runtime() -> None:
     if "pytest" in sys.modules:
         return
-    if os.environ.get("ENABLE_IN_PROCESS_INGESTION", "true").lower() != "true":
-        return
-    ingestion_runtime.start()
-    overlay_ingestion_runtime.start()
+    if ingestion_runtime is not None:
+        ingestion_runtime.start()
+    if overlay_ingestion_runtime is not None:
+        overlay_ingestion_runtime.start()
 
 
 @app.on_event("shutdown")
 def stop_ingestion_runtime() -> None:
-    ingestion_runtime.stop()
-    overlay_ingestion_runtime.stop()
+    if ingestion_runtime is not None:
+        ingestion_runtime.stop()
+    if overlay_ingestion_runtime is not None:
+        overlay_ingestion_runtime.stop()

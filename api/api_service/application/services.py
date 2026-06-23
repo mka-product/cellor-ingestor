@@ -151,6 +151,8 @@ class UploadApplicationService:
                 "version_id": job.version_id.value,
                 "status": job.status.value,
                 "display_name": display_name,
+                "checksum": job.checksum.value,
+                "original_path": command.original_path,
                 "reader_backend": command.reader_backend or "fastslide",
                 "metadata_backend": command.metadata_backend or "openslide",
                 "progress_percent": 0.0,
