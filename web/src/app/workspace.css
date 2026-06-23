@@ -889,6 +889,7 @@ body {
   padding: 8px 10px;
   outline: none;
   transition: border-color 0.15s;
+  width: 100%;
 }
 
 .auth-input:focus {
@@ -964,6 +965,10 @@ body {
   display: grid;
   gap: var(--celnight-space-md);
   grid-template-columns: 1fr 1fr;
+}
+
+.auth-row > * {
+  min-width: 0;
 }
 
 .auth-info {
