@@ -206,7 +206,11 @@ export function App() {
           <button type="button" className={`workspace-nav${isOverlayOpsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/operations/overlays"); setRoute("/operations/overlays"); }}>
             Overlays
           </button>
-          <span className="workspace-topbar__user">{session.user.email}</span>
+          <span className="workspace-topbar__user">
+            {session.user.user_metadata?.first_name
+              ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name ?? ""}`.trim()
+              : session.user.email}
+          </span>
           <button type="button" className="workspace-nav" onClick={signOut}>Sign out</button>
         </nav>
       </header>
