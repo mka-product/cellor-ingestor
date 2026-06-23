@@ -24,6 +24,7 @@ class Settings:
     minio_access_key: str
     minio_secret_key: str
     minio_secure: bool
+    storage_bucket: str  # when set, all s3:// URIs are mapped into this single bucket
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,4 +40,5 @@ class Settings:
             minio_access_key=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
             minio_secret_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
             minio_secure=os.environ.get("MINIO_SECURE", "false").lower() == "true",
+            storage_bucket=os.environ.get("STORAGE_BUCKET", ""),
         )

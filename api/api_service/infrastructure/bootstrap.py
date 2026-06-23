@@ -65,7 +65,8 @@ class Container:
                 access_key=self.settings.minio_access_key,
                 secret_key=self.settings.minio_secret_key,
                 secure=self.settings.minio_secure,
-            )
+            ),
+            storage_bucket=self.settings.storage_bucket,
         )
         if self.settings.state_backend == "object_store":
             self.catalog = ObjectStoreCatalog(

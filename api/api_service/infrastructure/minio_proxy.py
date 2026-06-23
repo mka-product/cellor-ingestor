@@ -19,6 +19,7 @@ from minio.error import S3Error
 class MinioProxy:
     client: Minio
     public_base_path: str = "/storage"
+    storage_bucket: str = ""  # when non-empty, all virtual buckets map into this single real bucket
 
     def get_bytes(self, bucket: str, object_path: str) -> tuple[bytes, str]:
         response = self.client.get_object(bucket, object_path)
@@ -88,7 +89,10 @@ class MinioProxy:
 
     def split_uri(self, path: str) -> tuple[str, str]:
         stripped = path.removeprefix("s3://")
-        return stripped.split("/", 1)
+        virtual_bucket, key = stripped.split("/", 1)
+        if self.storage_bucket:
+            return self.storage_bucket, f"{virtual_bucket}/{key}"
+        return virtual_bucket, key
 
     def _split(self, path: str) -> tuple[str, str]:
         return self.split_uri(path)

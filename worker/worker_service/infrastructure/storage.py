@@ -39,6 +39,7 @@ class MinioArtifactStore:
     client: Minio
     staging_root: Path
     upload_workers: int = 4
+    storage_bucket: str = ""
     _pending: dict[str, tuple[Path, str]] = field(default_factory=dict)
 
     def write_bytes(self, path: str, payload: bytes, media_type: str) -> DerivedArtifact:
@@ -58,8 +59,10 @@ class MinioArtifactStore:
 
     def _split(self, path: str) -> tuple[str, str]:
         stripped = path.removeprefix("s3://")
-        bucket, key = stripped.split("/", 1)
-        return bucket, key
+        virtual_bucket, key = stripped.split("/", 1)
+        if self.storage_bucket:
+            return self.storage_bucket, f"{virtual_bucket}/{key}"
+        return virtual_bucket, key
 
     def upload_file(self, path: str, source_path: Path, media_type: str = "application/octet-stream") -> DerivedArtifact:
         bucket, key = self._split(path)

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: cellor-ingestor
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /slides
+    envVars:
+      - key: MINIO_ENDPOINT
+        value: s3.eu-central-003.backblazeb2.com
+      - key: MINIO_ACCESS_KEY
+        sync: false  # set in Render dashboard
+      - key: MINIO_SECRET_KEY
+        sync: false  # set in Render dashboard
+      - key: MINIO_SECURE
+        value: "true"
+      - key: STORAGE_BUCKET
+        sync: false  # set in Render dashboard — your Backblaze bucket name
+      - key: STATE_BACKEND
+        value: object_store
+      - key: STATIC_DIR
+        value: /app/web/dist
+      - key: CORS_ORIGINS
+        value: ""  # same-origin in production — no CORS needed

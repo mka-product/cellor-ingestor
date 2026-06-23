@@ -55,6 +55,7 @@ class Container:
                 Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure),
                 staging_root=self.root,
                 upload_workers=self.upload_workers,
+                storage_bucket=os.environ.get("STORAGE_BUCKET", ""),
             )
         else:
             self.store = LocalArtifactStore(self.root)

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.api_service.infrastructure.bootstrap import Container
 from api.api_service.infrastructure.ingestion_runtime import InProcessIngestionRuntime
@@ -23,18 +25,22 @@ container = Container()
 ingestion_runtime = InProcessIngestionRuntime(container)
 overlay_ingestion_runtime = InProcessOverlayIngestionRuntime(container)
 
+_cors_origins = [o for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o]
+
 app = FastAPI(title="Cellor Ingestor API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(router)
+
+# Serve the built React frontend — mount last so API routes take precedence
+_static_dir = os.environ.get("STATIC_DIR", "")
+if _static_dir and Path(_static_dir).exists():
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
 
 
 @app.on_event("startup")

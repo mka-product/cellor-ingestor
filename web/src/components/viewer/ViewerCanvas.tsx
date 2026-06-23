@@ -35,6 +35,12 @@ import {
 import { MiniMap } from "./MiniMap";
 import { ScaleBar } from "./ScaleBar";
 
+function presenceColor(userId: string): string {
+  let h = 0;
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) & 0xfffffff;
+  return `hsl(${h % 360}, 80%, 62%)`;
+}
+
 export type OverlayGroup = {
   id: string;
   features: OverlayFeature[];
@@ -828,18 +834,21 @@ export function ViewerCanvas(props: Props) {
           <RotateCw className="workspace-rotation-control__icon" strokeWidth={1.8} />
         </button>
       </div>
-      {projectedRemotePresence.map((presence) => (
-        <div
-          key={presence.userId}
-          className={`workspace-remote-cursor${presence.isOffscreen ? " is-offscreen" : ""}`}
-          style={{ left: `${presence.leftPercent}%`, top: `${presence.topPercent}%` }}
-          title={`${presence.userId} · ${formatPresenceMagnification(manifest, presence.zoom)}`}
-        >
-          <span className="workspace-remote-cursor__label">
-            {presence.userId} · {formatPresenceMagnification(manifest, presence.zoom)}
-          </span>
-        </div>
-      ))}
+      {projectedRemotePresence.map((presence) => {
+        const color = presenceColor(presence.userId);
+        return (
+          <div
+            key={presence.userId}
+            className={`workspace-remote-cursor${presence.isOffscreen ? " is-offscreen" : ""}`}
+            style={{ left: `${presence.leftPercent}%`, top: `${presence.topPercent}%`, background: color, borderColor: color }}
+            title={`${presence.userId} · ${formatPresenceMagnification(manifest, presence.zoom)}`}
+          >
+            <span className="workspace-remote-cursor__label" style={{ background: color }}>
+              {presence.userId} · {formatPresenceMagnification(manifest, presence.zoom)}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
