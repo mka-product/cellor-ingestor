@@ -933,3 +933,48 @@ body {
   text-overflow: ellipsis;
   max-width: 160px;
 }
+
+.auth-google {
+  align-items: center;
+  background: var(--celnight-bg-elevated);
+  border: 1px solid var(--celnight-border-subtle);
+  border-radius: 6px;
+  color: var(--celnight-text-primary);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--celnight-font-sans);
+  font-size: var(--celnight-text-md);
+  font-weight: 500;
+  gap: 8px;
+  justify-content: center;
+  padding: 10px;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+}
+
+.auth-google:hover:not(:disabled) {
+  border-color: var(--celnight-border-strong);
+  background: var(--celnight-surface-soft);
+}
+
+.auth-google:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.auth-divider {
+  align-items: center;
+  color: var(--celnight-text-muted);
+  display: flex;
+  font-size: var(--celnight-text-sm);
+  gap: var(--celnight-space-md);
+  margin: var(--celnight-space-lg) 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--celnight-border-subtle);
+}
