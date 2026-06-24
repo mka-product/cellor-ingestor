@@ -100,3 +100,36 @@ export async function uploadOverlayFile(formData: FormData): Promise<OverlayJob>
   }
   return (await response.json()) as OverlayJob;
 }
+
+export async function cancelOverlayJob(jobId: string): Promise<void> {
+  const response = await authedFetch(resolveApiUrl(`/overlay-jobs/${jobId}`), { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`overlay job cancel failed: ${response.status}`);
+  }
+}
+
+export async function retryOverlayJob(jobId: string): Promise<OverlayJob> {
+  const response = await authedFetch(resolveApiUrl(`/overlay-jobs/${jobId}/retry`), { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`overlay job retry failed: ${response.status}`);
+  }
+  return (await response.json()) as OverlayJob;
+}
+
+export async function setJobPriority(jobId: string, priority: number): Promise<void> {
+  const response = await authedFetch(resolveApiUrl(`/jobs/${jobId}/priority`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ priority }),
+  });
+  if (!response.ok) throw new Error(`set priority failed: ${response.status}`);
+}
+
+export async function setOverlayJobPriority(jobId: string, priority: number): Promise<void> {
+  const response = await authedFetch(resolveApiUrl(`/overlay-jobs/${jobId}/priority`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ priority }),
+  });
+  if (!response.ok) throw new Error(`set overlay priority failed: ${response.status}`);
+}

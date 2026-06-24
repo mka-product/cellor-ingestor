@@ -1,45 +1,60 @@
 import { useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { apiBasePath } from "../../infrastructure/apiBase";
+import { useAuth } from "./AuthContext";
 
 type Mode = "signin" | "signup";
 
 export function LoginPage() {
+  const { signIn } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   function switchMode(next: Mode) {
     setMode(next);
     setError(null);
-    setInfo(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setInfo(null);
     setLoading(true);
 
-    if (mode === "signin") {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-      if (authError) setError(authError.message);
-    } else {
-      const { error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { first_name: firstName, last_name: lastName } }
-      });
-      if (authError) {
-        setError(authError.message);
+    try {
+      if (mode === "signin") {
+        const body = new URLSearchParams({ username: email, password });
+        const res = await fetch(`${apiBasePath()}/auth/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({})) as { detail?: string };
+          setError(data.detail ?? "Invalid credentials");
+        } else {
+          const data = await res.json() as { access_token: string; user: { id: string; email: string; first_name: string; last_name: string } };
+          signIn(data.access_token, data.user);
+        }
       } else {
-        setInfo("Check your email for a confirmation link, then sign in.");
-        switchMode("signin");
+        const res = await fetch(`${apiBasePath()}/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, first_name: firstName, last_name: lastName }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({})) as { detail?: string };
+          setError(data.detail ?? "Signup failed");
+        } else {
+          const data = await res.json() as { access_token: string; user: { id: string; email: string; first_name: string; last_name: string } };
+          signIn(data.access_token, data.user);
+        }
       }
+    } catch {
+      setError("Network error, please try again");
     }
 
     setLoading(false);
@@ -116,7 +131,6 @@ export function LoginPage() {
             />
           </label>
           {error ? <p className="auth-error" role="alert">{error}</p> : null}
-          {info ? <p className="auth-info" role="status">{info}</p> : null}
           <button className="auth-submit" type="submit" disabled={loading}>
             {loading ? (mode === "signup" ? "Creating account…" : "Signing in…") : (mode === "signup" ? "Create account" : "Sign in")}
           </button>

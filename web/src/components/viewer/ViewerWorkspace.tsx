@@ -50,9 +50,13 @@ import { useOverlayRuntime } from "../../viewer/useOverlayRuntime";
 import {
   alphaColor,
   colorForFeature,
+  defaultOdColorScale,
   defaultOverlayStyleMap,
+  extractOdValue,
   inferOverlaySemanticMode,
-  sanitizeOverlayLabel
+  odModulatedFill,
+  sanitizeOverlayLabel,
+  type OdColorScale,
 } from "../../viewer/overlayStyling";
 import { MINIMAP_WIDTH } from "./viewerMath";
 
@@ -176,6 +180,9 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
   const [overlaySources, setOverlaySources] = useState<OverlaySource[]>([]);
   // Per-overlay styles: overlayId → classKey → style
   const [overlayStylesMap, setOverlayStylesMap] = useState<Record<string, Record<string, OverlayClassStyle>>>({});
+  const [overlayOdScales, setOverlayOdScales] = useState<Record<string, OdColorScale>>({});
+  // Tracks which overlays have had their OD scale initialized so subsequent chunk loads don't shift the scale.
+  const odInitializedRef = useRef<Set<string>>(new Set());
   // Per-overlay runtime data reported by OverlayRuntimeConnector children
   const [overlayRuntimesByKey, setOverlayRuntimesByKey] = useState<Record<string, OverlayRuntimeData>>({});
   const [annotationLayers, setAnnotationLayers] = useState<AnnotationLayer[]>([]);
@@ -235,6 +242,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
   // Clean up runtime data for overlays that were deactivated.
   useEffect(() => {
     const activeSet = new Set(workspace.activeOverlayIds);
+    odInitializedRef.current = new Set([...odInitializedRef.current].filter((id) => activeSet.has(id)));
     setOverlayRuntimesByKey((current) => {
       const staleKeys = Object.keys(current).filter((id) => !activeSet.has(id));
       if (staleKeys.length === 0) return current;
@@ -242,7 +250,34 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
       staleKeys.forEach((id) => delete next[id]);
       return next;
     });
+    setOverlayOdScales((current) => {
+      const staleKeys = Object.keys(current).filter((id) => !activeSet.has(id));
+      if (staleKeys.length === 0) return current;
+      const next = { ...current };
+      staleKeys.forEach((id) => delete next[id]);
+      return next;
+    });
   }, [workspace.activeOverlayIds]);
+
+  // Initialize the OD color scale the first time features arrive for each overlay.
+  // Uses a ref to ensure the scale is locked after first computation — subsequent chunk
+  // loads do not shift breakpoints, keeping the color encoding stable during pan/zoom.
+  useEffect(() => {
+    for (const [overlayId, runtime] of Object.entries(overlayRuntimesByKey)) {
+      if (odInitializedRef.current.has(overlayId)) continue;
+      if (runtime.features.length === 0) continue;
+      // Use "any polygon has OD" rather than the 50%-majority check — at heatmap zoom only a
+      // sparse sample of chunks is loaded, so the majority threshold may never fire even when
+      // the overlay has per-cell OD data throughout.
+      const hasAnyOd = runtime.features.some(
+        (f) => f.kind === "polygon" && extractOdValue(f) !== null,
+      );
+      if (!hasAnyOd) continue;
+      odInitializedRef.current.add(overlayId);
+      const scale = defaultOdColorScale(runtime.features);
+      setOverlayOdScales((current) => (current[overlayId] ? current : { ...current, [overlayId]: scale }));
+    }
+  }, [overlayRuntimesByKey, overlaySources]);
 
   // Build styled overlay groups for the canvas — one per visible active overlay.
   const overlayGroups = useMemo((): OverlayGroup[] => {
@@ -252,8 +287,9 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
         const runtime = overlayRuntimesByKey[id];
         if (!runtime || runtime.features.length === 0) return [];
         const source = overlaySources.find((s) => s.id === id) ?? null;
-        const styles = overlayStylesMap[id] ?? {};
         const semanticMode = inferOverlaySemanticMode(runtime.features, source);
+        const odScale = overlayOdScales[id] ?? null;
+        const styles = overlayStylesMap[id] ?? {};
         const defaultStyles = defaultOverlayStyleMap(source, runtime.features, semanticMode);
         const styledFeatures = runtime.features.flatMap((feature) => {
           const style = colorForFeature(feature, semanticMode, styles, defaultStyles);
@@ -268,6 +304,14 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
               : feature.properties.isCluster || feature.properties.isHeatmap
                 ? Math.min(1, 0.45 + Math.log2(count + 1) / 8)
                 : 1;
+
+          // When an OD scale is active, modulate the fill saturation by OD value.
+          // Stroke stays at full class color; features without OD fall back to normal class fill.
+          const od = odScale ? extractOdValue(feature) : null;
+          const fillColor = od !== null && odScale
+            ? odModulatedFill(style.color, style.opacity * densityBoost, od, odScale)
+            : alphaColor(style.color, style.opacity * densityBoost);
+
           return [{
             ...feature,
             name: sanitizeOverlayLabel(feature.name),
@@ -280,14 +324,14 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
             },
             styleHints: {
               ...feature.styleHints,
-              color: alphaColor(style.color, style.opacity * densityBoost),
+              color: fillColor,
               strokeWidth: style.strokeWidth
             }
           }];
         });
         return [{ id, features: styledFeatures, runtimeMode: runtime.runtimeMode }];
       });
-  }, [workspace.activeOverlayIds, workspace.overlayVisibility, overlayRuntimesByKey, overlayStylesMap, overlaySources]);
+  }, [workspace.activeOverlayIds, workspace.overlayVisibility, overlayRuntimesByKey, overlayStylesMap, overlayOdScales, overlaySources]);
 
   const focusedRuntimeData = useMemo(
     () => (workspace.focusedOverlayId ? overlayRuntimesByKey[workspace.focusedOverlayId] ?? null : null),
@@ -950,6 +994,10 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
                 [key]: style
               }
             }))
+          }
+          odScale={overlayOdScales[workspace.focusedOverlayId!] ?? null}
+          onOdScaleChange={(scale) =>
+            setOverlayOdScales((current) => ({ ...current, [workspace.focusedOverlayId!]: scale }))
           }
         />
       ) : null}

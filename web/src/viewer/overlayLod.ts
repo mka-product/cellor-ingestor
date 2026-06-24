@@ -7,6 +7,16 @@ Failure modes: unsupported or malformed geometries degrade to coarser centroid c
 
 import type { OverlayFeature } from "../domain/workspace";
 
+// Local OD extraction — mirrors OD_FIELD_CANDIDATES in overlayStyling without a cross-module import.
+const OD_FIELDS = ["od", "OD", "optical_density", "od_nucleus", "od_cytoplasm", "od_membrane"] as const;
+function featureOd(feature: OverlayFeature): number | null {
+  for (const k of OD_FIELDS) {
+    const v = feature.properties[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
 export type OverlayRenderMode = "raw" | "simplified" | "cluster" | "heatmap";
 
 export type OverlayRenderPlan = {
@@ -279,6 +289,8 @@ function buildHeatmapFeatures(features: OverlayFeature[], scale: number): Overla
       centerX: number;
       centerY: number;
       classCounts: Record<string, number>;
+      odSum: number;
+      odCount: number;
     }
   >();
 
@@ -295,6 +307,7 @@ function buildHeatmapFeatures(features: OverlayFeature[], scale: number): Overla
       : 1;
     const color = overlayColor(feature, [56, 189, 248, 255]);
     const cls = String(feature.properties.class ?? feature.properties.label ?? "default");
+    const od = featureOd(feature);
     const existing = bins.get(key);
     if (existing) {
       existing.count += weight;
@@ -302,6 +315,7 @@ function buildHeatmapFeatures(features: OverlayFeature[], scale: number): Overla
       existing.scoreSum += score * weight;
       existing.colorSum = [existing.colorSum[0] + color[0] * weight, existing.colorSum[1] + color[1] * weight, existing.colorSum[2] + color[2] * weight, existing.colorSum[3] + color[3] * weight];
       existing.classCounts[cls] = (existing.classCounts[cls] ?? 0) + weight;
+      if (od !== null) { existing.odSum += od * weight; existing.odCount += weight; }
       continue;
     }
     bins.set(key, {
@@ -311,7 +325,9 @@ function buildHeatmapFeatures(features: OverlayFeature[], scale: number): Overla
       colorSum: [color[0] * weight, color[1] * weight, color[2] * weight, color[3] * weight],
       centerX: (binX + 0.5) * imageBinSize,
       centerY: (binY + 0.5) * imageBinSize,
-      classCounts: { [cls]: weight }
+      classCounts: { [cls]: weight },
+      odSum: od !== null ? od * weight : 0,
+      odCount: od !== null ? weight : 0,
     });
   }
 
@@ -343,7 +359,8 @@ function buildHeatmapFeatures(features: OverlayFeature[], scale: number): Overla
         count: Math.round(value.count),
         score: value.scoreSum / value.count,
         isHeatmap: true,
-        density: logDensity
+        density: logDensity,
+        ...(value.odCount > 0 ? { od: value.odSum / value.odCount } : {}),
       },
       styleHints: {
         color: [
@@ -381,6 +398,8 @@ function buildClusterFeatures(features: OverlayFeature[], scale: number): Overla
       centerXSum: number;
       centerYSum: number;
       centerWeight: number;
+      odSum: number;
+      odCount: number;
     }
   >();
 
@@ -393,6 +412,7 @@ function buildClusterFeatures(features: OverlayFeature[], scale: number): Overla
     const color = overlayColor(feature, [56, 189, 248, 180]);
     const baseX = Math.floor(centerX / imageBinSize);
     const baseY = Math.floor(centerY / imageBinSize);
+    const od = featureOd(feature);
 
     for (let offsetY = -2; offsetY <= 2; offsetY += 1) {
       for (let offsetX = -2; offsetX <= 2; offsetX += 1) {
@@ -403,11 +423,11 @@ function buildClusterFeatures(features: OverlayFeature[], scale: number): Overla
         const cellY = baseY + offsetY;
         const key = `${className}:${cellX}:${cellY}`;
         const existing = field.get(key);
+        const isBase = offsetX === 0 && offsetY === 0;
         if (existing) {
           existing.influence += influence;
           existing.count += 1;
-          // Only count the base cell contribution toward the actual feature count
-          if (offsetX === 0 && offsetY === 0) existing.featureCount += 1;
+          if (isBase) existing.featureCount += 1;
           existing.scoreSum += score ?? 0;
           existing.minX = Math.min(existing.minX, minX);
           existing.minY = Math.min(existing.minY, minY);
@@ -423,12 +443,14 @@ function buildClusterFeatures(features: OverlayFeature[], scale: number): Overla
           existing.centerYSum += centerY * influence;
           existing.centerWeight += influence;
           existing.colorSum = [existing.colorSum[0] + color[0], existing.colorSum[1] + color[1], existing.colorSum[2] + color[2]];
+          // OD: only accumulate from the base cell so we reflect the actual feature location
+          if (isBase && od !== null) { existing.odSum += od; existing.odCount += 1; }
           continue;
         }
         field.set(key, {
           influence,
           count: 1,
-          featureCount: offsetX === 0 && offsetY === 0 ? 1 : 0,
+          featureCount: isBase ? 1 : 0,
           scoreSum: score ?? 0,
           cellX,
           cellY,
@@ -441,7 +463,9 @@ function buildClusterFeatures(features: OverlayFeature[], scale: number): Overla
           maxScore: score,
           centerXSum: centerX * influence,
           centerYSum: centerY * influence,
-          centerWeight: influence
+          centerWeight: influence,
+          odSum: isBase && od !== null ? od : 0,
+          odCount: isBase && od !== null ? 1 : 0,
         });
       }
     }
@@ -474,7 +498,8 @@ function buildClusterFeatures(features: OverlayFeature[], scale: number): Overla
           class: value.className,
           count: displayCount,
           score: value.maxScore ?? value.scoreSum / Math.max(1, value.count),
-          isCluster: true
+          isCluster: true,
+          ...(value.odCount > 0 ? { od: value.odSum / value.odCount } : {}),
         },
         styleHints: {
           color: [

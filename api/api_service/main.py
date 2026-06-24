@@ -21,20 +21,27 @@ from api.api_service.auth import verify_token
 
 logger = logging.getLogger("cellor.auth")
 from api.api_service.infrastructure.bootstrap import Container
+from api.api_service.interfaces.http.auth_routes import auth_router
 from api.api_service.interfaces.http.routes import router
+from api.api_service.interfaces.http.system_routes import system_router
 from api.api_service.observability.logging import configure_logging
 
 configure_logging()
 container = Container()
 
 _enable_ingestion = os.environ.get("ENABLE_IN_PROCESS_INGESTION", "true").lower() == "true"
+_enable_overlay_ingestion = os.environ.get("ENABLE_IN_PROCESS_OVERLAY_INGESTION", "true").lower() == "true"
+
 if _enable_ingestion:
     from api.api_service.infrastructure.ingestion_runtime import InProcessIngestionRuntime
-    from api.api_service.infrastructure.overlay_runtime import InProcessOverlayIngestionRuntime
     ingestion_runtime = InProcessIngestionRuntime(container)
-    overlay_ingestion_runtime = InProcessOverlayIngestionRuntime(container)
 else:
     ingestion_runtime = None
+
+if _enable_ingestion and _enable_overlay_ingestion:
+    from api.api_service.infrastructure.overlay_runtime import InProcessOverlayIngestionRuntime
+    overlay_ingestion_runtime = InProcessOverlayIngestionRuntime(container)
+else:
     overlay_ingestion_runtime = None
 
 _cors_origins = [o for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o]
@@ -72,6 +79,8 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+app.include_router(auth_router)
+app.include_router(system_router)
 app.include_router(router)
 
 # Serve the built React frontend — mount last so API routes take precedence

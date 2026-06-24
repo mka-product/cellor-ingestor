@@ -232,14 +232,30 @@ def _parse_tile_grid_json(payload: dict[str, Any], name: str) -> ParsedOverlay:
     return ParsedOverlay(name=name, kind="tiled-score", features=features, legend=legend, metadata=metadata, source_format="tile-grid-json")
 
 
+def _detect_json_format(payload: dict) -> str:
+    """Heuristic: return the sub-format of an ambiguous .json file."""
+    if payload.get("type") == "FeatureCollection" and "features" in payload:
+        return "geojson"
+    if isinstance(payload.get("results"), dict) and "slide_grid_config" in payload["results"]:
+        return "tile-grid-json"
+    # Fall back to treating as GeoJSON and let validation raise a clear error.
+    return "geojson"
+
+
 def parse_overlay_source(source_path: Path, source_format: str, display_name: str) -> ParsedOverlay:
-    source_format = source_format.lower()
+    source_format = source_format.lower().strip()
     if source_format == "geojson":
         return _parse_geojson(json.loads(source_path.read_text()), display_name)
     if source_format == "tile-grid-json":
         return _parse_tile_grid_json(json.loads(source_path.read_text()), display_name)
-    if source_format == "geoparquet":
+    if source_format in {"geoparquet", "parquet"}:
         return _parse_geoparquet(source_path, display_name)
+    if source_format == "json":
+        payload = json.loads(source_path.read_text())
+        detected = _detect_json_format(payload)
+        if detected == "geojson":
+            return _parse_geojson(payload, display_name)
+        return _parse_tile_grid_json(payload, display_name)
     if source_format == "ovsi":
         return ParsedOverlay(
             name=display_name,

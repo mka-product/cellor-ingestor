@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 
 from api.api_service.application.dto import CompleteUploadCommand, InitiateUploadCommand
 from api.api_service.auth import verify_token
@@ -280,6 +280,56 @@ def get_overlay_job(job_id: str, container: Container = Depends(get_container)) 
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return OverlayUploadResponse(**_normalize_overlay_job_payload(job))
+
+
+@router.post("/overlay-jobs/{job_id}/retry", response_model=OverlayUploadResponse)
+def retry_overlay_job(job_id: str, container: Container = Depends(get_container)) -> OverlayUploadResponse:
+    try:
+        job = container.overlay_ingestion_service.get_job(job_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    current_status = job.get("status")
+    if current_status not in {"running", "failed"}:
+        raise HTTPException(status_code=409, detail=f"only failed or stuck running jobs can be retried (current: {current_status})")
+    reset = {**job, "status": "pending", "stage": "queued", "progress_percent": 0.0, "message": "Queued for retry"}
+    container.catalog.upsert_overlay_job(reset)
+    return OverlayUploadResponse(**_normalize_overlay_job_payload(reset))
+
+
+@router.delete("/overlay-jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_overlay_job(job_id: str, container: Container = Depends(get_container)) -> Response:
+    try:
+        job = container.overlay_ingestion_service.get_job(job_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    if job.get("status") not in {"pending", "running"}:
+        raise HTTPException(status_code=409, detail="only pending or running overlay jobs can be cancelled")
+    container.catalog.upsert_overlay_job({**job, "status": "failed", "stage": "cancelled", "message": "Cancelled by user"})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/jobs/{job_id}/priority", status_code=status.HTTP_200_OK)
+def set_job_priority(job_id: str, priority: int = Body(..., embed=True), container: Container = Depends(get_container)) -> dict:
+    try:
+        job = container.catalog.get_job(job_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    if job.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="only pending jobs can be reprioritized")
+    container.catalog.upsert_job({**job, "priority": int(priority)})
+    return {"ok": True}
+
+
+@router.patch("/overlay-jobs/{job_id}/priority", status_code=status.HTTP_200_OK)
+def set_overlay_job_priority(job_id: str, priority: int = Body(..., embed=True), container: Container = Depends(get_container)) -> dict:
+    try:
+        job = container.overlay_ingestion_service.get_job(job_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    if job.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="only pending overlay jobs can be reprioritized")
+    container.catalog.upsert_overlay_job({**job, "priority": int(priority)})
+    return {"ok": True}
 
 
 @router.get("/readers", response_model=list[AvailableReader])

@@ -15,7 +15,7 @@ import { selectLevel } from "../../viewer/lod";
 import { buildOverlayRenderPlan, computeOverlayLodThresholds, type OverlayRenderMode } from "../../viewer/overlayLod";
 import type { OverlayWindow } from "../../viewer/overlayManifest";
 import { createOverlayLayers } from "../../viewer/overlayLayers";
-import { sanitizeOverlayLabel } from "../../viewer/overlayStyling";
+import { extractOdEntry, sanitizeOverlayLabel } from "../../viewer/overlayStyling";
 import { TileCache } from "../../viewer/tileCache";
 import { createBitmapLayers } from "../../viewer/tileBitmapLayers";
 import { createAnnotationEditorLayer } from "./AnnotationEditorLayer";
@@ -248,11 +248,13 @@ function overlayTooltip(info: { object?: { name?: string; properties?: Record<st
   }
   const properties = info.object.properties ?? {};
   const isHeatmap = Boolean(properties.isHeatmap);
+  const odEntry = extractOdEntry({ properties } as Parameters<typeof extractOdEntry>[0]);
   const lines = [
     isHeatmap
       ? (properties.class != null ? `${sanitizeOverlayLabel(String(properties.class))} — density cell` : "Density cell")
       : (typeof info.object.name === "string" ? sanitizeOverlayLabel(info.object.name) : null),
     !isHeatmap && properties.class != null ? `Class: ${sanitizeOverlayLabel(String(properties.class))}` : null,
+    odEntry !== null ? `${odEntry.label}: ${odEntry.value.toFixed(4)}` : null,
     typeof properties.score === "number" ? `Score: ${properties.score.toFixed(3)}` : null,
     typeof properties.count === "number" ? `${isHeatmap ? "Features" : "Count"}: ${properties.count}` : null
   ].filter((line): line is string => Boolean(line));
@@ -613,8 +615,9 @@ export function ViewerCanvas(props: Props) {
       const size = viewerSizeRef.current;
       const normalizedX = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, size.width)));
       const normalizedY = Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, size.height)));
-      const slideX = vw.left + normalizedX * (vw.right - vw.left);
-      const slideY = vw.top + normalizedY * (vw.bottom - vw.top);
+      const localScale = 2 ** vs.zoom;
+      const slideX = vs.target[0] + (normalizedX - 0.5) * size.width / localScale;
+      const slideY = vs.target[1] + (normalizedY - 0.5) * size.height / localScale;
       lastPresencePointerRef.current = { x: normalizedX, y: normalizedY, slideX, slideY };
       onPresenceUpdate({
         x: normalizedX,
@@ -641,12 +644,19 @@ export function ViewerCanvas(props: Props) {
 
   useEffect(() => {
     const pointer = lastPresencePointerRef.current;
+    const effectScale = 2 ** viewState.zoom;
+    const slideX = pointer != null
+      ? viewState.target[0] + (pointer.x - 0.5) * viewerSize.width / effectScale
+      : viewState.target[0];
+    const slideY = pointer != null
+      ? viewState.target[1] + (pointer.y - 0.5) * viewerSize.height / effectScale
+      : viewState.target[1];
     const payload = {
       x: pointer?.x ?? 0.5,
       y: pointer?.y ?? 0.5,
       zoom: viewState.zoom,
-      slideX: pointer?.slideX ?? viewState.target[0],
-      slideY: pointer?.slideY ?? worldToTopDownY(manifest.height, viewState.target[1]),
+      slideX,
+      slideY,
       viewport: visibleWindow,
       centerX: viewState.target[0],
       centerY: worldToTopDownY(manifest.height, viewState.target[1]),
@@ -655,7 +665,7 @@ export function ViewerCanvas(props: Props) {
     if (lastPresencePayloadRef.current === fingerprint) return;
     lastPresencePayloadRef.current = fingerprint;
     props.onPresenceUpdate?.(payload);
-  }, [manifest.height, props.onPresenceUpdate, viewState.target, viewState.zoom, visibleWindow]);
+  }, [manifest.height, props.onPresenceUpdate, viewState.target, viewState.zoom, viewerSize.width, viewerSize.height, visibleWindow]);
 
   const minimapHeight = useMemo(() => Math.round((MINIMAP_WIDTH * manifest.height) / manifest.width), [manifest.height, manifest.width]);
   const minimapRect = useMemo(() => {
@@ -680,8 +690,12 @@ export function ViewerCanvas(props: Props) {
   );
 
   const projectedRemotePresence = useMemo(() => {
-    const width = Math.max(1, visibleWindow.right - visibleWindow.left);
-    const height = Math.max(1, visibleWindow.bottom - visibleWindow.top);
+    const halfW = viewerSize.width / (2 * scale);
+    const halfH = viewerSize.height / (2 * scale);
+    const unclampedLeft = viewState.target[0] - halfW;
+    const unclampedTop = viewState.target[1] - halfH;
+    const totalW = Math.max(1, 2 * halfW);
+    const totalH = Math.max(1, 2 * halfH);
     return (props.remotePresence ?? [])
       .map((presence) => {
         if (typeof presence.slideX !== "number" || typeof presence.slideY !== "number") {
@@ -694,8 +708,8 @@ export function ViewerCanvas(props: Props) {
             isOffscreen: false
           };
         }
-        const localX = ((presence.slideX - visibleWindow.left) / width) * 100;
-        const localY = ((presence.slideY - visibleWindow.top) / height) * 100;
+        const localX = ((presence.slideX - unclampedLeft) / totalW) * 100;
+        const localY = ((presence.slideY - unclampedTop) / totalH) * 100;
         return {
           userId: presence.userId,
           displayName: presence.displayName,
@@ -705,7 +719,7 @@ export function ViewerCanvas(props: Props) {
           isOffscreen: localX < 0 || localX > 100 || localY < 0 || localY > 100
         };
       });
-  }, [props.remotePresence, visibleWindow.bottom, visibleWindow.left, visibleWindow.right, visibleWindow.top]);
+  }, [props.remotePresence, scale, viewState.target, viewerSize.width, viewerSize.height]);
 
   const scaleBar = useMemo(() => {
     const mpp = manifest.metadata?.micronsPerPixel?.x ?? manifest.metadata?.micronsPerPixel?.y;

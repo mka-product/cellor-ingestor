@@ -46,6 +46,7 @@ export type IngestionJob = {
   started_at?: string | null;
   updated_at?: string | null;
   metrics?: JobMetrics;
+  priority?: number;
 };
 
 export type OverlayJob = {
@@ -68,4 +69,5 @@ export type OverlayJob = {
   updated_at?: string | null;
   metrics?: JobMetrics;
   artifact?: Record<string, unknown>;
+  priority?: number;
 };

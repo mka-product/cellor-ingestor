@@ -1,18 +1,28 @@
-import { supabase } from "./supabase";
+const TOKEN_KEY = "cellor_token";
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
 
 export async function authedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = getStoredToken();
   return fetch(input, {
     ...init,
     headers: {
       ...(init?.headers as Record<string, string> | undefined),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return getStoredToken();
 }

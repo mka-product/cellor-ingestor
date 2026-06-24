@@ -59,15 +59,26 @@ class Container:
     queue: InMemoryJobQueue = field(default_factory=InMemoryJobQueue)
 
     def __post_init__(self) -> None:
+        import os, urllib3
+        from api.api_service.auth import UserStore
+        _http_client = None
+        if os.environ.get("MINIO_DISABLE_TLS_VERIFY", "false").lower() == "true":
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            _http_client = urllib3.PoolManager(cert_reqs="CERT_NONE")
         self.minio_proxy = MinioProxy(
             Minio(
                 self.settings.minio_endpoint,
                 access_key=self.settings.minio_access_key,
                 secret_key=self.settings.minio_secret_key,
                 secure=self.settings.minio_secure,
+                http_client=_http_client,
             ),
             storage_bucket=self.settings.storage_bucket,
         )
+        self.user_store = UserStore(self.minio_proxy)
+        self._current_endpoint: str = self.settings.minio_endpoint
+        self._current_bucket: str = self.settings.storage_bucket
+        self._current_secure: bool = self.settings.minio_secure
         if self.settings.state_backend == "object_store":
             self.catalog = ObjectStoreCatalog(
                 ObjectJsonDocumentStore(self.minio_proxy, self.settings.catalog_uri, {"slides": [], "jobs": [], "overlay_jobs": []})
@@ -112,3 +123,19 @@ class Container:
     @property
     def review_service(self) -> ReviewApplicationService:
         return ReviewApplicationService(self.annotation_layers, self.annotations, self.comments, self.tags, self.reviews)
+
+    def reconfigure_storage(self, endpoint: str, access_key: str, secret_key: str, bucket: str, secure: bool) -> None:
+        new_client = Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+        list(new_client.list_buckets())  # raises on unreachable
+        new_proxy = MinioProxy(new_client, storage_bucket=bucket)
+        self.minio_proxy = new_proxy
+        self.user_store._proxy = new_proxy
+        if hasattr(self, "catalog") and hasattr(self.catalog, "store"):
+            self.catalog.store.proxy = new_proxy
+        if hasattr(self, "overlays") and hasattr(self.overlays, "store"):
+            self.overlays.store.proxy = new_proxy
+        if hasattr(self, "review_store") and hasattr(self.review_store, "store"):
+            self.review_store.store.proxy = new_proxy
+        self._current_endpoint = endpoint
+        self._current_bucket = bucket
+        self._current_secure = secure

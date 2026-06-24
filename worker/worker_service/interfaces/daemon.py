@@ -164,13 +164,21 @@ def run_daemon() -> None:
     while True:
         try:
             jobs = container.catalog.list_jobs()
-            pending = [j for j in jobs if j.get("status") == "pending"]
+            pending = sorted(
+                [j for j in jobs if j.get("status") == "pending"],
+                key=lambda j: int(j.get("priority", 0)),
+                reverse=True,
+            )
             for job in pending:
                 if _claim_job(container, job):
                     _process_job(container, job)
 
             overlay_jobs = container.catalog.list_overlay_jobs()
-            pending_overlays = [j for j in overlay_jobs if j.get("status") == "pending"]
+            pending_overlays = sorted(
+                [j for j in overlay_jobs if j.get("status") == "pending"],
+                key=lambda j: int(j.get("priority", 0)),
+                reverse=True,
+            )
             for job in pending_overlays:
                 if _claim_overlay_job(container, job):
                     _process_overlay_job(container, job)

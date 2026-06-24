@@ -96,3 +96,12 @@ class MinioProxy:
 
     def _split(self, path: str) -> tuple[str, str]:
         return self.split_uri(path)
+
+    def probe(self) -> dict:
+        try:
+            buckets = [b.name for b in self.client.list_buckets()]
+            if self.storage_bucket and self.storage_bucket not in buckets:
+                return {"reachable": True, "bucket_ok": False, "error": f"bucket '{self.storage_bucket}' not found"}
+            return {"reachable": True, "bucket_ok": True, "error": None}
+        except Exception as exc:
+            return {"reachable": False, "bucket_ok": False, "error": str(exc)}

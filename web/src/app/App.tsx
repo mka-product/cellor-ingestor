@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../components/auth/AuthContext";
 import { LoginPage } from "../components/auth/LoginPage";
+import { S3StatusIndicator } from "../components/S3StatusIndicator";
 import { Viewer } from "../components/Viewer";
-import { OverlaysOperationsPage } from "../components/operations/OverlaysOperationsPage";
-import { SlidesOperationsPage } from "../components/operations/SlidesOperationsPage";
+import { JobsPage } from "../components/jobs/JobsPage";
 import type { CatalogSlide } from "../domain/catalog";
 import type { ViewerManifest } from "../domain/contracts";
 import { fetchSlides, fetchManifestContent } from "../infrastructure/catalogClient";
+import { useDropUpload } from "../lib/useDropUpload";
 
 function parseInitialViewerParams() {
   const p = new URLSearchParams(window.location.search);
@@ -40,9 +41,8 @@ export function App() {
   );
 
   const selectedSlideLabel = selectedSlide?.display_name ?? "";
-  const isViewerRoute = !route.startsWith("/operations/");
-  const isSlideOpsRoute = route === "/operations/slides";
-  const isOverlayOpsRoute = route === "/operations/overlays";
+  const isViewerRoute = route !== "/jobs";
+  const isJobsRoute = route === "/jobs";
 
   useEffect(() => {
     const onPopState = () => setRoute(window.location.pathname || "/");
@@ -116,6 +116,9 @@ export function App() {
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [selectedSlide]);
 
+  const { state: dropState, onDragEnter, onDragLeave, onDragOver, onDrop, clearResult } =
+    useDropUpload(selectedSlide?.slide_id ?? null);
+
   if (authLoading) return null;
   if (!session) return <LoginPage />;
 
@@ -128,7 +131,36 @@ export function App() {
   }
 
   return (
-    <main className="workspace-app">
+    <main
+      className="workspace-app"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {dropState.isDragging && (
+        <div className="drop-overlay">
+          <div className="drop-overlay__label">
+            {selectedSlide
+              ? "Drop slides or overlays to upload"
+              : "Drop slides to upload (open a slide to also accept overlays)"}
+          </div>
+        </div>
+      )}
+      {dropState.isUploading && (
+        <div className="drop-overlay drop-overlay--uploading">
+          <div className="drop-overlay__label">Uploading…</div>
+        </div>
+      )}
+      {dropState.lastResult && (
+        <div className={`drop-toast ${dropState.lastResult.errors.length ? "drop-toast--error" : "drop-toast--ok"}`}>
+          <span>
+            {dropState.lastResult.queued > 0 && `${dropState.lastResult.queued} file${dropState.lastResult.queued !== 1 ? "s" : ""} queued. `}
+            {dropState.lastResult.errors.map((e, i) => <span key={i}>{e} </span>)}
+          </span>
+          <button type="button" className="drop-toast__close" onClick={clearResult}>✕</button>
+        </div>
+      )}
       <header className="workspace-topbar">
         <div className="workspace-topbar__brand">
           <h1 className="workspace-logo">Cellor Workspace</h1>
@@ -200,15 +232,13 @@ export function App() {
           <button type="button" className={`workspace-nav${isViewerRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/"); setRoute("/"); }}>
             Viewer
           </button>
-          <button type="button" className={`workspace-nav${isSlideOpsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/operations/slides"); setRoute("/operations/slides"); }}>
-            Slides
+          <button type="button" className={`workspace-nav${isJobsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/jobs"); setRoute("/jobs"); }}>
+            Jobs
           </button>
-          <button type="button" className={`workspace-nav${isOverlayOpsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/operations/overlays"); setRoute("/operations/overlays"); }}>
-            Overlays
-          </button>
+          <S3StatusIndicator />
           <span className="workspace-topbar__user">
-            {session.user.user_metadata?.first_name
-              ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name ?? ""}`.trim()
+            {session.user.first_name
+              ? `${session.user.first_name} ${session.user.last_name}`.trim()
               : session.user.email}
           </span>
           <button type="button" className="workspace-nav" onClick={signOut}>Sign out</button>
@@ -224,19 +254,18 @@ export function App() {
               initialViewport={initialViewerParams.viewport}
               initialAnnotationId={initialViewerParams.annotationId}
               initialOverlayIds={initialViewerParams.overlayIds}
-              userId={session.user.email ?? session.user.id}
+              userId={session.user.email}
               displayName={
-                session.user.user_metadata?.first_name
-                  ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name ?? ""}`.trim()
-                  : (session.user.email ?? session.user.id)
+                session.user.first_name
+                  ? `${session.user.first_name} ${session.user.last_name}`.trim()
+                  : session.user.email
               }
               accessToken={session.access_token}
             />
           ) : null}
         </>
       ) : null}
-      {isSlideOpsRoute ? <SlidesOperationsPage /> : null}
-      {isOverlayOpsRoute ? <OverlaysOperationsPage /> : null}
+      {isJobsRoute ? <JobsPage /> : null}
     </main>
   );
 }
