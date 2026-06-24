@@ -34,3 +34,21 @@ services:
       - ./data/catalog:/data/catalog
       - ./test_dataset:/datasets
       - ./data/artifacts:/artifacts
+
+  daemon:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file:
+      - .env
+    environment:
+      CATALOG_PATH: /data/catalog/catalog.json
+      OVERLAYS_PATH: /data/catalog/overlays.json
+      REVIEWS_PATH: /data/catalog/reviews.json
+      OVERLAY_STAGING_DIR: /data/overlay-staging
+      DAEMON_POLL_INTERVAL: "10"
+    volumes:
+      - ./data/catalog:/data/catalog
+      - ./data/overlay-staging:/data/overlay-staging
+    depends_on:
+      - api

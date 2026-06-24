@@ -318,10 +318,16 @@ class OverlayIngestionApplicationService:
         job_id = f"overlay-job-{uuid4().hex[:12]}"
         checksum = f"sha256:{hashlib.sha256(payload).hexdigest()}"
         started_at = utc_now().isoformat()
-        object_path = f"s3://raw-overlays/{slide_id}/{overlay_id}/{filename}"
-        if self._minio_proxy is None:
-            raise RuntimeError("overlay staging requires object storage")
-        self._minio_proxy.put_bytes(object_path, payload, "application/octet-stream")
+        if self._minio_proxy is not None:
+            object_path = f"s3://raw-overlays/{slide_id}/{overlay_id}/{filename}"
+            self._minio_proxy.put_bytes(object_path, payload, "application/octet-stream")
+        else:
+            import os
+            staging_dir = Path(os.environ.get("OVERLAY_STAGING_DIR", ".artifacts/overlay-staging")) / slide_id / overlay_id
+            staging_dir.mkdir(parents=True, exist_ok=True)
+            local_path = staging_dir / filename
+            local_path.write_bytes(payload)
+            object_path = f"file://{local_path.resolve()}"
         staged = {
             "job_id": job_id,
             "slide_id": slide_id,
@@ -349,9 +355,12 @@ class OverlayIngestionApplicationService:
 
     def process_staged_upload(self, staged: dict[str, object]) -> dict[str, object]:
         object_path = str(staged["object_path"])
-        if self._minio_proxy is None:
-            raise RuntimeError("overlay staging requires object storage")
-        payload, _ = self._minio_proxy.get_s3_bytes(object_path)
+        if object_path.startswith("file://"):
+            payload = Path(object_path.removeprefix("file://")).read_bytes()
+        elif self._minio_proxy is not None:
+            payload, _ = self._minio_proxy.get_s3_bytes(object_path)
+        else:
+            raise RuntimeError("overlay staging requires object storage or local file path")
         return self._ingest_payload(
             slide_id=str(staged["slide_id"]),
             overlay_id=str(staged["overlay_id"]),
