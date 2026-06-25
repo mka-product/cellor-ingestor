@@ -369,10 +369,6 @@ export function OverlayStylePanel(props: Props) {
               </button>
             </div>
 
-            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 10 }}>
-              Drag handles or click bar · 0% = class only · 100% = pure OD map
-            </div>
-
             <PalettePicker
               current={odScale.palette ?? "dab"}
               onChange={(p) => onOdScaleChange({ ...odScale, palette: p })}

@@ -14,7 +14,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.api_service.auth import verify_token
@@ -64,6 +64,14 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
     if request.method == "OPTIONS":
         return await call_next(request)
+    # Browser full-page navigation (e.g. the user refreshes /jobs in the address bar) sends
+    # Sec-Fetch-Mode: navigate.  JavaScript fetch/XHR calls do not.  Serve the SPA shell so
+    # the React router can restore the route; the frontend handles auth from localStorage.
+    if request.headers.get("sec-fetch-mode") == "navigate":
+        static_dir = os.environ.get("STATIC_DIR", "")
+        index_path = Path(static_dir) / "index.html"
+        if index_path.exists():
+            return FileResponse(str(index_path))
     auth_header = request.headers.get("authorization", "")
     token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else None
     try:

@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.api_service.auth import require_auth
 from api.api_service.infrastructure.bootstrap import Container
 
 system_router = APIRouter(prefix="/system", tags=["system"])
@@ -23,7 +22,7 @@ class StorageConfigRequest(BaseModel):
 
 
 @system_router.get("/storage")
-def storage_status(container: Container = Depends(get_container), _: dict = Depends(require_auth)) -> dict:
+def storage_status(container: Container = Depends(get_container)) -> dict:
     probe = container.minio_proxy.probe()
     return {
         "endpoint": container._current_endpoint,
@@ -37,7 +36,6 @@ def storage_status(container: Container = Depends(get_container), _: dict = Depe
 def storage_reconfigure(
     payload: StorageConfigRequest,
     container: Container = Depends(get_container),
-    _: dict = Depends(require_auth),
 ) -> dict:
     secret = payload.secret_key or container.settings.minio_secret_key
     try:

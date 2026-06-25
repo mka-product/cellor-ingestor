@@ -34,6 +34,7 @@ import {
   WorkspaceRequestError
 } from "../../infrastructure/workspaceClient";
 import { resolveWebSocketUrl } from "../../infrastructure/apiBase";
+import { notificationStore } from "../../lib/notificationStore";
 import { AnnotationEditPanel } from "./AnnotationEditPanel";
 import { CommentsPanel } from "./CommentsPanel";
 import { FloatingPanelFrame } from "./FloatingPanelFrame";
@@ -220,6 +221,12 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
   const lastPresencePayloadRef = useRef<Record<string, unknown> | null>(null);
   const urlViewportRef = useRef<{ cx: number; cy: number; zoom: number } | null>(null);
   const urlSyncTimerRef = useRef<number | null>(null);
+  // Refs for values needed inside the stable WebSocket onmessage closure
+  const selectedAnnotationIdRef = useRef<string | null>(null);
+  const commentsRef = useRef<AnnotationComment[]>([]);
+  const annotationLayersRef = useRef<AnnotationLayer[]>([]);
+  // Tracks layer IDs created by this user in this session (for notification relevance)
+  const myLayerIdsRef = useRef<Set<string>>(new Set());
 
   // Stable callback so OverlayRuntimeConnector's useEffect doesn't re-fire due to reference changes.
   const handleRuntimeUpdate = useCallback((overlayId: string, data: OverlayRuntimeData) => {
@@ -473,37 +480,114 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
     };
     socket.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as {
-          type: string;
-          userId?: string;
-          displayName?: string;
-          x?: number;
-          y?: number;
-          zoom?: number;
-          slideX?: number;
-          slideY?: number;
-          viewport?: OverlayWindow;
-          centerX?: number;
-          centerY?: number;
-        };
-        if (payload.type !== "presence.cursor" || !payload.userId || payload.userId === localPresenceId) return;
-        const remoteUserId = payload.userId;
-        setRemotePresence((current) => {
-          const next = current.filter((entry) => entry.userId !== remoteUserId);
-          next.push({
-            userId: remoteUserId,
-            displayName: payload.displayName,
-            x: payload.x ?? 0.5,
-            y: payload.y ?? 0.5,
-            zoom: payload.zoom ?? 0,
-            slideX: payload.slideX,
-            slideY: payload.slideY,
-            viewport: payload.viewport,
-            centerX: payload.centerX,
-            centerY: payload.centerY
+        const payload = JSON.parse(event.data) as Record<string, unknown>;
+        const msgType = payload.type as string | undefined;
+        const senderId = payload.userId as string | undefined;
+        const isRemote = senderId !== localPresenceId;
+
+        // ── presence cursor ──────────────────────────────────────────────────
+        if (msgType === "presence.cursor" && senderId && isRemote) {
+          setRemotePresence((current) => {
+            const next = current.filter((e) => e.userId !== senderId);
+            next.push({
+              userId: senderId,
+              displayName: payload.displayName as string | undefined,
+              x: (payload.x as number) ?? 0.5,
+              y: (payload.y as number) ?? 0.5,
+              zoom: (payload.zoom as number) ?? 0,
+              slideX: payload.slideX as number | undefined,
+              slideY: payload.slideY as number | undefined,
+              viewport: payload.viewport as OverlayWindow | undefined,
+              centerX: payload.centerX as number | undefined,
+              centerY: payload.centerY as number | undefined,
+            });
+            return next;
           });
-          return next;
-        });
+          return;
+        }
+
+        // ── annotation mutations from peers ──────────────────────────────────
+        if (!isRemote) return; // ignore echo of own messages
+
+        if (msgType === "annotation.saved") {
+          const annotation = payload.annotation as AnnotationFeature | undefined;
+          if (!annotation) return;
+          setAnnotations((current) => {
+            const idx = current.findIndex((a) => a.id === annotation.id);
+            return idx >= 0
+              ? current.map((a, i) => (i === idx ? annotation : a))
+              : [...current, annotation];
+          });
+          // Notify if it's on a layer I created
+          if (myLayerIdsRef.current.has(annotation.layerId)) {
+            const layerName =
+              annotationLayersRef.current.find((l) => l.id === annotation.layerId)?.name ?? "your layer";
+            notificationStore.add({
+              type: "annotation_change",
+              title: `Annotation added to "${layerName}"`,
+              body: senderId ?? "A collaborator",
+              annotationId: annotation.id,
+            });
+          }
+          return;
+        }
+
+        if (msgType === "annotation.deleted") {
+          const annotationId = payload.annotationId as string | undefined;
+          if (!annotationId) return;
+          setAnnotations((current) => current.filter((a) => a.id !== annotationId));
+          return;
+        }
+
+        if (msgType === "comment.created") {
+          const comment = payload.comment as AnnotationComment | undefined;
+          const annotationId = payload.annotationId as string | undefined;
+          if (!comment || !annotationId) return;
+          // Apply to UI if this annotation is currently selected
+          if (selectedAnnotationIdRef.current === annotationId) {
+            setComments((current) =>
+              current.some((c) => c.id === comment.id) ? current : [...current, comment]
+            );
+          }
+          // Notify if this is a reply to one of my comments
+          if (comment.parentId) {
+            const parent = commentsRef.current.find((c) => c.id === comment.parentId);
+            const myIdentity = displayName ?? userId ?? "";
+            if (parent && myIdentity && parent.author === myIdentity) {
+              notificationStore.add({
+                type: "reply",
+                title: "New reply to your comment",
+                body: `${comment.author}: ${comment.body.slice(0, 80)}`,
+                annotationId,
+              });
+            }
+          }
+          return;
+        }
+
+        if (msgType === "comment.updated") {
+          const comment = payload.comment as AnnotationComment | undefined;
+          const annotationId = payload.annotationId as string | undefined;
+          if (!comment || !annotationId) return;
+          if (selectedAnnotationIdRef.current === annotationId) {
+            setComments((current) =>
+              current.map((c) => (c.id === comment.id ? comment : c))
+            );
+          }
+          return;
+        }
+
+        if (msgType === "comment.deleted") {
+          const commentId = payload.commentId as string | undefined;
+          const annotationId = payload.annotationId as string | undefined;
+          if (!commentId || !annotationId) return;
+          if (selectedAnnotationIdRef.current === annotationId) {
+            setComments((current) =>
+              current.filter((c) => c.id !== commentId && c.parentId !== commentId)
+            );
+          }
+          return;
+        }
       } catch {
         return;
       }
@@ -569,9 +653,10 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
 
   const threadedComments = useMemo(() => flattenThread(comments), [comments]);
 
-  useEffect(() => {
-    annotationsRef.current = annotations;
-  }, [annotations]);
+  useEffect(() => { annotationsRef.current = annotations; }, [annotations]);
+  useEffect(() => { selectedAnnotationIdRef.current = workspace.selectedAnnotationId; }, [workspace.selectedAnnotationId]);
+  useEffect(() => { commentsRef.current = comments; }, [comments]);
+  useEffect(() => { annotationLayersRef.current = annotationLayers; }, [annotationLayers]);
 
   useEffect(() => {
     return () => {
@@ -623,6 +708,16 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
           ...changed.map((feature) => saveAnnotation(manifest.slideId, feature))
         ]);
         setAnnotationSaveError(null);
+        // Broadcast mutations to peers on the same slide
+        const socket = presenceSocketRef.current;
+        if (socket?.readyState === WebSocket.OPEN) {
+          for (const f of removed) {
+            socket.send(JSON.stringify({ type: "annotation.deleted", annotationId: f.id, layerId: f.layerId, userId: localPresenceId }));
+          }
+          for (const f of changed) {
+            socket.send(JSON.stringify({ type: "annotation.saved", annotation: f, userId: localPresenceId }));
+          }
+        }
       } catch (error) {
         rollbackAffectedAnnotations(previous, affectedIds);
         setAnnotationSaveError(
@@ -662,6 +757,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
       isVisible: true,
       isLocked: false
     });
+    myLayerIdsRef.current.add(layer.id);
     setAnnotationLayers((current) => [...current, layer]);
     setWorkspace((current) => ({ ...current, activeLayerId: layer.id }));
   };
@@ -1064,19 +1160,31 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
           onBringToFront={() => bumpPanel("comments")}
           onClose={() => setWorkspace((current) => ({ ...current, showComments: false }))}
           onAddComment={(body, parentId) =>
-            createComment(manifest.slideId, selectedAnnotation.id, body, displayName ?? userId ?? "unknown", parentId).then((comment) =>
-              setComments((current) => [...current, comment])
-            )
+            createComment(manifest.slideId, selectedAnnotation.id, body, displayName ?? userId ?? "unknown", parentId).then((comment) => {
+              setComments((current) => [...current, comment]);
+              const socket = presenceSocketRef.current;
+              if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "comment.created", annotationId: selectedAnnotation.id, comment, userId: localPresenceId }));
+              }
+            })
           }
           onUpdateComment={(commentId, body, author) =>
-            updateComment(manifest.slideId, selectedAnnotation.id, commentId, body, author).then((comment) =>
-              setComments((current) => current.map((item) => (item.id === comment.id ? comment : item)))
-            )
+            updateComment(manifest.slideId, selectedAnnotation.id, commentId, body, author).then((comment) => {
+              setComments((current) => current.map((item) => (item.id === comment.id ? comment : item)));
+              const socket = presenceSocketRef.current;
+              if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "comment.updated", annotationId: selectedAnnotation.id, comment, userId: localPresenceId }));
+              }
+            })
           }
           onDeleteComment={(commentId) =>
-            deleteComment(manifest.slideId, selectedAnnotation.id, commentId).then(() =>
-              setComments((current) => current.filter((item) => item.id !== commentId && item.parentId !== commentId))
-            )
+            deleteComment(manifest.slideId, selectedAnnotation.id, commentId).then(() => {
+              setComments((current) => current.filter((item) => item.id !== commentId && item.parentId !== commentId));
+              const socket = presenceSocketRef.current;
+              if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "comment.deleted", annotationId: selectedAnnotation.id, commentId, userId: localPresenceId }));
+              }
+            })
           }
         />
       ) : null}

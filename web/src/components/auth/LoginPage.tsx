@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiBasePath } from "../../infrastructure/apiBase";
+import { S3StatusIndicator } from "../S3StatusIndicator";
 import { useAuth } from "./AuthContext";
 
 type Mode = "signin" | "signup";
@@ -135,6 +136,9 @@ export function LoginPage() {
             {loading ? (mode === "signup" ? "Creating account…" : "Signing in…") : (mode === "signup" ? "Create account" : "Sign in")}
           </button>
         </form>
+        <div className="auth-storage">
+          <S3StatusIndicator />
+        </div>
       </div>
     </div>
   );

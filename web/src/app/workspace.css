@@ -981,6 +981,20 @@ body {
   padding: 8px 10px;
 }
 
+.auth-storage {
+  display: flex;
+  justify-content: flex-end;
+  margin: var(--celnight-space-lg) calc(-1 * var(--celnight-space-3xl)) calc(-1 * var(--celnight-space-3xl));
+  padding: var(--celnight-space-md) var(--celnight-space-lg);
+  border-top: 1px solid var(--celnight-border-subtle);
+}
+
+/* Make the storage popover open upward when inside the login card */
+.auth-storage .s3-config-popover {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
 /* ── S3 Status Indicator ── */
 .s3-indicator-wrap {
   position: relative;
@@ -1151,6 +1165,175 @@ body {
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+}
+
+/* ── Notification bell ────────────────────────────────────────── */
+.notif-wrap {
+  position: relative;
+}
+
+.notif-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--celnight-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  transition: color 0.15s;
+}
+
+.notif-btn:hover,
+.notif-btn.is-active {
+  color: var(--celnight-text-primary);
+}
+
+.notif-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.notif-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 200;
+  width: 320px;
+  border: 1px solid var(--celnight-border-strong);
+  background: var(--celnight-bg-elevated);
+  box-shadow: var(--celnight-shadow-soft);
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow: hidden;
+}
+
+.notif-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--celnight-border-subtle);
+  font-size: var(--celnight-text-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--celnight-text-secondary);
+  flex-shrink: 0;
+}
+
+.notif-popover__header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.notif-popover__list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notif-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: var(--celnight-text-sm);
+  color: var(--celnight-text-muted);
+}
+
+.notif-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--celnight-border-subtle);
+}
+
+.notif-item.is-unread {
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.notif-item__icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--celnight-text-muted);
+}
+
+.notif-item.is-unread .notif-item__icon {
+  color: var(--celnight-accent);
+}
+
+.notif-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-item__title {
+  font-size: var(--celnight-text-sm);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--celnight-text-secondary);
+}
+
+.notif-item.is-unread .notif-item__title {
+  font-weight: 600;
+  color: var(--celnight-text-primary);
+}
+
+.notif-item__desc {
+  font-size: var(--celnight-text-xs);
+  color: var(--celnight-text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notif-item__time {
+  font-size: var(--celnight-text-xs);
+  color: var(--celnight-text-muted);
+  opacity: 0.55;
+  margin-top: 3px;
+}
+
+.notif-item__dismiss {
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: none;
+  background: transparent;
+  color: var(--celnight-text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+
+.notif-item:hover .notif-item__dismiss {
+  opacity: 1;
+}
+
+.notif-item__dismiss:hover {
+  color: var(--celnight-text-primary);
+}
+
+.notif-item--failed .notif-item__icon {
+  color: #f87171;
 }
 
 /* ── Drop overlay ─────────────────────────────────────────────── */

@@ -2,13 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../components/auth/AuthContext";
 import { LoginPage } from "../components/auth/LoginPage";
+import { NotificationBell } from "../components/NotificationBell";
 import { S3StatusIndicator } from "../components/S3StatusIndicator";
 import { Viewer } from "../components/Viewer";
 import { JobsPage } from "../components/jobs/JobsPage";
 import type { CatalogSlide } from "../domain/catalog";
 import type { ViewerManifest } from "../domain/contracts";
-import { fetchSlides, fetchManifestContent } from "../infrastructure/catalogClient";
+import { fetchSlides, fetchManifestContent, fetchJobs, fetchOverlayJobs } from "../infrastructure/catalogClient";
 import { useDropUpload } from "../lib/useDropUpload";
+import { notificationStore } from "../lib/notificationStore";
+
+const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
 
 function parseInitialViewerParams() {
   const p = new URLSearchParams(window.location.search);
@@ -33,7 +37,10 @@ export function App() {
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
+  const prevJobStatusRef = useRef<Map<string, string>>(new Map());
+  const notifiedJobsRef = useRef<Set<string>>(new Set());
 
   const selectedSlide = useMemo(
     () => slides.find((slide) => `${slide.slide_id}:${slide.version_id}` === selectedKey) ?? null,
@@ -118,6 +125,49 @@ export function App() {
 
   const { state: dropState, onDragEnter, onDragLeave, onDragOver, onDrop, clearResult } =
     useDropUpload(selectedSlide?.slide_id ?? null);
+
+  // Background job poller — generates notifications when jobs transition to a terminal state.
+  // Runs every 15 s while the user is authenticated; does not depend on the jobs page being open.
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    async function poll() {
+      if (!active) return;
+      try {
+        const [slides, overlays] = await Promise.all([fetchJobs(), fetchOverlayJobs()]);
+        const all = [
+          ...slides.map((j) => ({ id: j.job_id, name: j.display_name, status: j.status })),
+          ...overlays.map((j) => ({ id: j.job_id, name: j.name, status: j.status })),
+        ];
+        for (const job of all) {
+          const prev = prevJobStatusRef.current.get(job.id);
+          if (
+            prev !== undefined &&
+            !TERMINAL_JOB_STATUSES.has(prev) &&
+            TERMINAL_JOB_STATUSES.has(job.status) &&
+            !notifiedJobsRef.current.has(job.id)
+          ) {
+            notifiedJobsRef.current.add(job.id);
+            notificationStore.add({
+              type: job.status === "succeeded" ? "job_done" : "job_failed",
+              title: job.status === "succeeded" ? "Ingestion complete" : "Ingestion failed",
+              body: job.name,
+              jobId: job.id,
+            });
+          }
+          prevJobStatusRef.current.set(job.id, job.status);
+        }
+      } catch {
+        // silently skip — network or auth failures are transient
+      }
+    }
+    poll();
+    const interval = setInterval(poll, 15_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [session]);
 
   if (authLoading) return null;
   if (!session) return <LoginPage />;
@@ -235,6 +285,7 @@ export function App() {
           <button type="button" className={`workspace-nav${isJobsRoute ? " is-active" : ""}`} onClick={() => { window.history.pushState({}, "", "/jobs"); setRoute("/jobs"); }}>
             Jobs
           </button>
+          <NotificationBell open={notifOpen} onToggle={() => setNotifOpen((o) => !o)} />
           <S3StatusIndicator />
           <span className="workspace-topbar__user">
             {session.user.first_name
