@@ -320,9 +320,13 @@ def main() -> None:
     try:
         import webview  # noqa: PLC0415
 
+        # Create the window with a blank page first.  Loading the real URL
+        # immediately in create_window can fail on macOS before the Cocoa
+        # runloop is fully active.  We navigate to the real URL inside the
+        # func= startup callback, which fires once the GUI is ready.
         window = webview.create_window(
             "Cellor",
-            url,
+            "about:blank",
             width=1440,
             height=900,
             min_size=(900, 600),
@@ -333,10 +337,15 @@ def main() -> None:
 
         window.events.closed += _on_window_closed
 
-        # webview.start() blocks the main thread (required by Cocoa/WinRT/GTK).
-        # It returns when the window is closed, which triggers _shutdown above.
+        def _on_start(win: "webview.Window") -> None:  # type: ignore[name-defined]
+            # Small settle delay so the Cocoa runloop and the API's static-file
+            # mount have both fully initialised before the first navigation.
+            time.sleep(0.8)
+            win.load_url(url)
+
         _log("Cellor is running. Close the window to quit.")
-        webview.start(debug=False)
+        # webview.start() blocks the main thread (required by Cocoa/WinRT/GTK).
+        webview.start(func=_on_start, args=window, debug=False)
         return  # _shutdown was already called via the closed event
 
     except ImportError:

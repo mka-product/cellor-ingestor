@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" shape-rendering="crispEdges">
+  <!-- Black background -->
+  <rect width="32" height="32" fill="#000000"/>
+  <!-- White border — no radius, 1.5px stroke inset so it stays inside the viewport -->
+  <rect x="1" y="1" width="30" height="30" fill="none" stroke="#ffffff" stroke-width="1.5"/>
+  <!-- "c" anchored in the bottom-left quadrant (x 0–16, y 16–32) with 3px inner padding -->
+  <!-- baseline at 32 − 3 = 29, left at 3 -->
+  <text
+    x="3"
+    y="29"
+    font-family="'SF Mono', 'Courier New', monospace"
+    font-size="12"
+    font-weight="700"
+    fill="#ffffff"
+    dominant-baseline="auto"
+  >c</text>
+</svg>
