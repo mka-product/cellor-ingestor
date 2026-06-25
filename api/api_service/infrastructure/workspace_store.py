@@ -85,6 +85,12 @@ class FileOverlayRepository:
         self._write_json_payload(payload)
         return overlay
 
+    def delete(self, slide_id: SlideId, overlay_id: OverlayId) -> None:
+        data = self._read()
+        slide_bucket = data["slides"].get(slide_id.value, {})
+        slide_bucket["overlays"] = [o for o in slide_bucket.get("overlays", []) if o.get("id") != overlay_id.value]
+        self._write_json_payload(data)
+
     def _to_overlay(self, slide_id: SlideId, payload: dict[str, Any]) -> OverlayDefinition:
         return OverlayDefinition(
             overlay_id=OverlayId(str(payload["id"])),

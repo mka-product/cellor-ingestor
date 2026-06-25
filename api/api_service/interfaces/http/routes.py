@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 
 from api.api_service.application.dto import CompleteUploadCommand, InitiateUploadCommand
-from api.api_service.auth import verify_token
+from api.api_service.auth import require_auth, verify_token
 from api.api_service.infrastructure.bootstrap import Container
 from api.api_service.interfaces.http.schemas import (
     AnnotationLayerRequest,
@@ -386,6 +386,18 @@ def get_storage_object(bucket: str, object_path: str, container: Container = Dep
 @router.get("/slides/{slide_id}/overlays", response_model=list[OverlaySummaryResponse])
 def list_overlays(slide_id: str, container: Container = Depends(get_container)) -> list[OverlaySummaryResponse]:
     return [OverlaySummaryResponse(**payload) for payload in container.overlay_service.list_overlays(slide_id)]
+
+
+@router.delete("/slides/{slide_id}/overlays/{overlay_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_overlay(
+    slide_id: str,
+    overlay_id: str,
+    container: Container = Depends(get_container),
+    _: dict = Depends(require_auth),
+) -> Response:
+    from api.api_service.domain.models import OverlayId, SlideId  # noqa: PLC0415
+    container.overlays.delete(SlideId(slide_id), OverlayId(overlay_id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/slides/{slide_id}/overlays/{overlay_id}", response_model=OverlayDetailResponse)

@@ -313,12 +313,37 @@ def main() -> None:
     _log("Preparing local session…")
     token = ensure_local_user_token(api_port, data_dir)
 
-    # ── 4. Open browser ────────────────────────────────────────────────
+    # ── 4. Open app window ─────────────────────────────────────────────
     url = f"http://127.0.0.1:{api_port}?token={urllib.parse.quote(token, safe='')}"
     _log(f"Opening {url}")
-    webbrowser.open(url)
 
-    # ── 5. Stay alive; exit if MinIO dies ──────────────────────────────
+    try:
+        import webview  # noqa: PLC0415
+
+        window = webview.create_window(
+            "Cellor",
+            url,
+            width=1440,
+            height=900,
+            min_size=(900, 600),
+        )
+
+        def _on_window_closed():
+            _shutdown()
+
+        window.events.closed += _on_window_closed
+
+        # webview.start() blocks the main thread (required by Cocoa/WinRT/GTK).
+        # It returns when the window is closed, which triggers _shutdown above.
+        _log("Cellor is running. Close the window to quit.")
+        webview.start(debug=False)
+        return  # _shutdown was already called via the closed event
+
+    except ImportError:
+        # pywebview not available — fall back to browser + keep-alive loop
+        webbrowser.open(url)
+
+    # ── 5. Stay alive; exit if MinIO dies (browser fallback only) ──────
     _log("Cellor is running. Close this window or press Ctrl+C to quit.")
     try:
         while True:

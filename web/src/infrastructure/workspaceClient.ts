@@ -54,6 +54,11 @@ export async function fetchOverlaySources(slideId: string, signal?: AbortSignal)
   return parseJson(authedFetch(resolveApiUrl(`/slides/${slideId}/overlays`), { signal }));
 }
 
+export async function deleteOverlay(slideId: string, overlayId: string): Promise<void> {
+  const res = await authedFetch(resolveApiUrl(`/slides/${slideId}/overlays/${overlayId}`), { method: "DELETE" });
+  if (!res.ok) throw new Error(`DELETE overlay failed: ${res.status}`);
+}
+
 export async function fetchOverlayDetail(
   slideId: string,
   overlayId: string,

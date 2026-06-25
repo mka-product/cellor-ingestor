@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Palette } from "lucide-react";
+import { Eye, EyeOff, Palette, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ViewerManifest } from "../../domain/contracts";
@@ -23,6 +23,7 @@ import {
   fetchAnnotationLayers,
   fetchAnnotations,
   fetchComments,
+  deleteOverlay,
   fetchOverlaySources,
   fetchReviews,
   fetchTags,
@@ -179,6 +180,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
   const [panelLayout, setPanelLayout] = useState(INITIAL_LAYOUT);
   const [tool, setTool] = useState("view");
   const [overlaySources, setOverlaySources] = useState<OverlaySource[]>([]);
+  const [confirmDeleteOverlayId, setConfirmDeleteOverlayId] = useState<string | null>(null);
   // Per-overlay styles: overlayId → classKey → style
   const [overlayStylesMap, setOverlayStylesMap] = useState<Record<string, Record<string, OverlayClassStyle>>>({});
   const [overlayOdScales, setOverlayOdScales] = useState<Record<string, OdColorScale>>({});
@@ -860,6 +862,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
 
 
   const toggleOverlayActive = (overlayId: string) => {
+    setConfirmDeleteOverlayId((current) => (current === overlayId ? null : current));
     setWorkspace((current) => {
       const isActive = current.activeOverlayIds.includes(overlayId);
       if (isActive) {
@@ -1114,12 +1117,67 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
                           padding: "0 10px",
                           background: isFocused && workspace.showOverlayStyle ? "rgba(255,255,255,0.08)" : "transparent",
                           border: "none",
+                          borderBottom: "1px solid rgba(255,255,255,0.12)",
                           color: "inherit",
                           cursor: "pointer"
                         }}
                       >
                         <Palette size={14} />
                       </button>
+                      {confirmDeleteOverlayId === overlay.id ? (
+                        <button
+                          type="button"
+                          title="Confirm delete"
+                          onClick={async () => {
+                            setConfirmDeleteOverlayId(null);
+                            await deleteOverlay(manifest.slideId, overlay.id).catch(() => {});
+                            setOverlaySources((current) => current.filter((s) => s.id !== overlay.id));
+                            setWorkspace((current) => ({
+                              ...current,
+                              activeOverlayIds: current.activeOverlayIds.filter((id) => id !== overlay.id),
+                              focusedOverlayId: current.focusedOverlayId === overlay.id ? null : current.focusedOverlayId,
+                              showOverlayStyle: current.focusedOverlayId === overlay.id ? false : current.showOverlayStyle,
+                            }));
+                          }}
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "0 10px",
+                            background: "var(--celnight-danger, #dc2626)",
+                            border: "none",
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            letterSpacing: "0.03em"
+                          }}
+                        >
+                          Delete?
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Delete overlay"
+                          onClick={() => setConfirmDeleteOverlayId(overlay.id)}
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "0 10px",
+                            background: "transparent",
+                            border: "none",
+                            color: "rgba(255,255,255,0.45)",
+                            cursor: "pointer"
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--celnight-danger, #dc2626)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.45)"; }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </div>

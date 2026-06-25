@@ -180,6 +180,12 @@ class ObjectStoreOverlayRepository:
         self.store.write(document, revision)
         return overlay
 
+    def delete(self, slide_id: SlideId, overlay_id: OverlayId) -> None:
+        document, revision = self.store.read()
+        slide_bucket = document.setdefault("slides", {}).setdefault(slide_id.value, {"overlays": []})
+        slide_bucket["overlays"] = [o for o in slide_bucket["overlays"] if o.get("id") != overlay_id.value]
+        self.store.write(document, revision)
+
     def _to_overlay(self, slide_id: SlideId, payload: dict[str, Any]) -> OverlayDefinition:
         return OverlayDefinition(
             overlay_id=OverlayId(str(payload["id"])),
