@@ -82,6 +82,18 @@ def _feature_score_from_payload(feature: dict[str, Any]) -> float:
     return float(value) if isinstance(value, (int, float)) else 0.0
 
 
+_OD_FIELD_CANDIDATES = ("od", "OD", "optical_density", "od_nucleus", "od_cytoplasm", "od_membrane")
+
+
+def _feature_od_from_payload(feature: dict[str, Any]) -> float | None:
+    props = feature.get("properties", {})
+    for key in _OD_FIELD_CANDIDATES:
+        v = props.get(key)
+        if isinstance(v, (int, float)) and math.isfinite(float(v)):
+            return float(v)
+    return None
+
+
 def _feature_color_from_payload(feature: dict[str, Any]) -> tuple[int, int, int, int]:
     color = feature.get("styleHints", {}).get("color")
     if isinstance(color, list) and len(color) >= 3:
@@ -253,6 +265,7 @@ def _build_cluster_summary(features: list[dict[str, Any]], chunk_bounds: tuple[f
         bin_y = int(math.floor((center_y - min_y) / bin_size))
         key = f"{class_name}:{bin_x}:{bin_y}"
         color = _feature_color_from_payload(feature)
+        od = _feature_od_from_payload(feature)
         entry = bins.setdefault(
             key,
             {
@@ -262,6 +275,8 @@ def _build_cluster_summary(features: list[dict[str, Any]], chunk_bounds: tuple[f
                 "center_y_sum": 0.0,
                 "color_sum": [0, 0, 0],
                 "class_name": class_name,
+                "od_sum": 0.0,
+                "od_count": 0,
             },
         )
         entry["count"] += 1
@@ -271,6 +286,9 @@ def _build_cluster_summary(features: list[dict[str, Any]], chunk_bounds: tuple[f
         entry["color_sum"][0] += color[0]
         entry["color_sum"][1] += color[1]
         entry["color_sum"][2] += color[2]
+        if od is not None:
+            entry["od_sum"] += od
+            entry["od_count"] += 1
 
     summary_features: list[dict[str, Any]] = []
     for index, (key, entry) in enumerate(sorted(bins.items())):
@@ -291,6 +309,7 @@ def _build_cluster_summary(features: list[dict[str, Any]], chunk_bounds: tuple[f
                     "score": entry["score_sum"] / count,
                     "isCluster": True,
                     "ovsiRepresentation": "cluster",
+                    **({"od": entry["od_sum"] / entry["od_count"]} if entry["od_count"] > 0 else {}),
                 },
                 style_hints={
                     "color": [
