@@ -1,0 +1,181 @@
+name: Desktop Build
+
+# Triggers:
+#   • Any tag starting with v (e.g. v1.0.0) → builds all platforms and attaches
+#     the installers to a GitHub Release.
+#   • workflow_dispatch → manual trigger for testing.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  # ── Build the React SPA once; reuse across all platform jobs ────────────
+  build-frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build SPA
+        run: cd web && npm ci --legacy-peer-deps && npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 1
+
+  # ── Per-platform desktop builds ─────────────────────────────────────────
+  desktop:
+    needs: build-frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Windows x64 ─────────────────────────────────────────────────
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            minio-url: https://dl.min.io/server/minio/release/windows-amd64/minio.exe
+            minio-bin: desktop/bin/minio.exe
+
+          # ── macOS Apple Silicon ──────────────────────────────────────────
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+            minio-url: https://dl.min.io/server/minio/release/darwin-arm64/minio
+            minio-bin: desktop/bin/minio
+
+          # ── macOS Intel ──────────────────────────────────────────────────
+          - os: macos-13
+            platform: macos
+            arch: x64
+            minio-url: https://dl.min.io/server/minio/release/darwin-amd64/minio
+            minio-bin: desktop/bin/minio
+
+          # ── Linux x86_64 ─────────────────────────────────────────────────
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            minio-url: https://dl.min.io/server/minio/release/linux-amd64/minio
+            minio-bin: desktop/bin/minio
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Restore pre-built SPA
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+
+      # ── System-level imaging libraries ───────────────────────────────────
+      - name: System deps (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libopenslide0 openslide-tools \
+            libvips42 libvips-tools \
+            libglib2.0-0 libexpat1 fuse
+
+      - name: System deps (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: brew install openslide vips
+
+      # ── Python environment ───────────────────────────────────────────────
+      # Windows: use conda-forge so openslide + pyvips come with bundled DLLs
+      - name: Set up Conda (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.11"
+          channels: conda-forge,defaults
+          channel-priority: strict
+          activate-environment: cellor-build
+
+      - name: Conda imaging libs (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash -el {0}
+        run: conda install -y openslide-python pyvips numpy pillow
+
+      - name: Set up Python (non-Windows)
+        if: matrix.os != 'windows-latest'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Install Python dependencies (all platforms)
+      - name: Python deps
+        shell: bash
+        run: |
+          python3 -m pip install --quiet pyinstaller pyinstaller-hooks-contrib
+          python3 -m pip install -r api/requirements.txt
+          python3 -m pip install -r worker/requirements.txt
+
+      # ── MinIO binary ─────────────────────────────────────────────────────
+      - name: Fetch MinIO (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p desktop/bin
+          curl -fsSL "${{ matrix.minio-url }}" -o "${{ matrix.minio-bin }}"
+          chmod +x "${{ matrix.minio-bin }}"
+
+      - name: Fetch MinIO (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/bin | Out-Null
+          Invoke-WebRequest "${{ matrix.minio-url }}" -OutFile "${{ matrix.minio-bin }}"
+
+      # ── PyInstaller ───────────────────────────────────────────────────────
+      - name: Build with PyInstaller
+        shell: bash
+        run: python3 -m PyInstaller desktop/cellor.spec
+
+      # ── Platform installers ───────────────────────────────────────────────
+      - name: Windows installer (Inno Setup)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $ver = "${{ github.ref_name }}" -replace '^v', ''
+          iscc "/DAppVersion=$ver" desktop\installer\windows.iss
+
+      - name: macOS DMG
+        if: startsWith(matrix.os, 'macos')
+        run: bash desktop/installer/macos/build.sh ${{ matrix.arch }}
+
+      - name: Linux AppImage
+        if: matrix.os == 'ubuntu-22.04'
+        run: bash desktop/installer/linux/build-appimage.sh
+
+      # ── Upload build artifacts ────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cellor-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/CellorSetup*.exe
+            dist/Cellor-macOS*.dmg
+            dist/Cellor-Linux*.AppImage
+          if-no-files-found: error
+
+      # ── Attach to GitHub Release (tag builds only) ────────────────────────
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/CellorSetup*.exe
+            dist/Cellor-macOS*.dmg
+            dist/Cellor-Linux*.AppImage

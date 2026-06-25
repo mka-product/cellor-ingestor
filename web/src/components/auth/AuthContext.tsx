@@ -40,7 +40,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = getStoredToken();
+    // Desktop launcher passes ?token= in the URL for auto-login.
+    // Store it and strip it from the address bar before proceeding.
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken) {
+      setToken(urlToken);
+      params.delete("token");
+      const qs = params.toString();
+      window.history.replaceState({}, "", qs ? `?${qs}` : window.location.pathname);
+    }
+
+    const token = urlToken ?? getStoredToken();
     if (!token) {
       setLoading(false);
       return;

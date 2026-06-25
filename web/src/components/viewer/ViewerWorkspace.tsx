@@ -368,8 +368,16 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
           isVisible: true,
           isLocked: false
         });
-        setAnnotationLayers([layer]);
-        setWorkspace((current) => ({ ...current, activeLayerId: layer.id }));
+        myLayerIdsRef.current.add(layer.id);
+        // Re-fetch in case another user created a layer in the same race window
+        const afterCreate = await fetchAnnotationLayers(manifest.slideId, controller.signal).catch(() => [layer]);
+        setAnnotationLayers(afterCreate.length > 0 ? afterCreate : [layer]);
+        setWorkspace((current) => ({ ...current, activeLayerId: current.activeLayerId ?? afterCreate[0]?.id ?? layer.id }));
+        // Let presence peers know about the new layer (if WS is already open)
+        const socket = presenceSocketRef.current;
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "layer.created", layer, userId: localPresenceId }));
+        }
       } else {
         setAnnotationLayers(nextLayers);
         setWorkspace((current) => ({ ...current, activeLayerId: current.activeLayerId ?? nextLayers[0]?.id ?? null }));
@@ -518,6 +526,16 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
               ? current.map((a, i) => (i === idx ? annotation : a))
               : [...current, annotation];
           });
+          // If this annotation belongs to a layer we don't know yet, sync layers from API
+          if (!annotationLayersRef.current.some((l) => l.id === annotation.layerId)) {
+            fetchAnnotationLayers(manifest.slideId).then((layers) => {
+              setAnnotationLayers((current) => {
+                const knownIds = new Set(current.map((l) => l.id));
+                const fresh = layers.filter((l) => !knownIds.has(l.id));
+                return fresh.length > 0 ? [...current, ...fresh] : current;
+              });
+            }).catch(() => {});
+          }
           // Notify if it's on a layer I created
           if (myLayerIdsRef.current.has(annotation.layerId)) {
             const layerName =
@@ -536,6 +554,32 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
           const annotationId = payload.annotationId as string | undefined;
           if (!annotationId) return;
           setAnnotations((current) => current.filter((a) => a.id !== annotationId));
+          return;
+        }
+
+        if (msgType === "layer.created") {
+          const layer = payload.layer as AnnotationLayer | undefined;
+          if (!layer) return;
+          setAnnotationLayers((current) =>
+            current.some((l) => l.id === layer.id) ? current : [...current, layer]
+          );
+          return;
+        }
+
+        if (msgType === "layer.updated") {
+          const layer = payload.layer as AnnotationLayer | undefined;
+          if (!layer) return;
+          setAnnotationLayers((current) =>
+            current.map((l) => (l.id === layer.id ? layer : l))
+          );
+          return;
+        }
+
+        if (msgType === "layer.deleted") {
+          const layerId = payload.layerId as string | undefined;
+          if (!layerId) return;
+          setAnnotationLayers((current) => current.filter((l) => l.id !== layerId));
+          setAnnotations((current) => current.filter((a) => a.layerId !== layerId));
           return;
         }
 
@@ -760,6 +804,10 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
     myLayerIdsRef.current.add(layer.id);
     setAnnotationLayers((current) => [...current, layer]);
     setWorkspace((current) => ({ ...current, activeLayerId: layer.id }));
+    const socket = presenceSocketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "layer.created", layer, userId: localPresenceId }));
+    }
   };
 
   const handleSelectAnnotation = useCallback(
@@ -951,6 +999,10 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
               if (!layer) return;
               const updated = await saveAnnotationLayer(manifest.slideId, { ...layer, id: layerId, name });
               setAnnotationLayers((current) => current.map((item) => (item.id === layerId ? updated : item)));
+              const socket = presenceSocketRef.current;
+              if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "layer.updated", layer: updated, userId: localPresenceId }));
+              }
             })()
           }
           onDeleteLayer={(layerId) =>
@@ -961,6 +1013,10 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
               if (workspace.activeLayerId === layerId) {
                 const remaining = annotationLayers.filter((layer) => layer.id !== layerId);
                 setWorkspace((current) => ({ ...current, activeLayerId: remaining[0]?.id ?? null }));
+              }
+              const socket = presenceSocketRef.current;
+              if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "layer.deleted", layerId, userId: localPresenceId }));
               }
             })()
           }

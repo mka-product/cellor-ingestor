@@ -27,6 +27,12 @@ data/minio/
 # Local tooling binaries
 .tools/
 
+# Desktop build artifacts (PyInstaller output + downloaded binaries)
+build/
+dist/
+desktop/bin/
+desktop/assets/
+
 # Generated catalogs
 data/catalog/catalog.json
 data/catalog/benchmark-catalog.json
