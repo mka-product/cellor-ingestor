@@ -58,6 +58,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!session) return;
+    setStatus("loading");
     const controller = new AbortController();
     (async () => {
       const nextSlides = await fetchSlides(controller.signal);
@@ -75,7 +77,8 @@ export function App() {
       if (!controller.signal.aborted) setStatus("error");
     });
     return () => controller.abort();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   useEffect(() => {
     if (!isViewerRoute) return;

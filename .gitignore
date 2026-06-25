@@ -32,6 +32,7 @@ build/
 dist/
 desktop/bin/
 desktop/assets/
+!desktop/assets/icon.png
 .venv-desktop/
 
 # Generated catalogs

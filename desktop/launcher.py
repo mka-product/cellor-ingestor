@@ -338,6 +338,21 @@ def main() -> None:
         window.events.closed += _on_window_closed
 
         def _on_start(win: "webview.Window") -> None:  # type: ignore[name-defined]
+            # Set the macOS dock icon once the Cocoa runloop is active.
+            try:
+                from AppKit import NSApplication, NSImage  # type: ignore[import]
+                icon_candidates = [
+                    Path(__file__).parent / "assets" / "icon.png",
+                    bundle_dir() / "desktop" / "assets" / "icon.png",
+                ]
+                for icon_path in icon_candidates:
+                    if icon_path.exists():
+                        ns_app = NSApplication.sharedApplication()
+                        ns_img = NSImage.alloc().initByReferencingFile_(str(icon_path))
+                        ns_app.setApplicationIconImage_(ns_img)
+                        break
+            except Exception:
+                pass
             # Small settle delay so the Cocoa runloop and the API's static-file
             # mount have both fully initialised before the first navigation.
             time.sleep(0.8)
