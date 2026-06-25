@@ -10,6 +10,7 @@ import type { Matrix4 } from "@math.gl/core";
 
 import type { OverlayFeature } from "../domain/workspace";
 import type { OverlayRenderMode } from "./overlayLod";
+import { odColorForValue, type OdColorScale } from "./overlayStyling";
 
 function overlayStrokeWidth(feature: OverlayFeature): number {
   return typeof feature.styleHints.strokeWidth === "number" ? feature.styleHints.strokeWidth : 2;
@@ -45,8 +46,10 @@ export function createOverlayLayers(args: {
   modelMatrix: Matrix4;
   /** Unique prefix for deck.gl layer IDs — required when multiple overlays are rendered simultaneously. */
   namespace?: string;
+  /** When present, heatmap bins with `properties.od` use the OD palette for color; density drives alpha. */
+  odColorScale?: OdColorScale | null;
 }): any[] {
-  const { mode, polygonOverlays, lineOverlays, pointOverlays, modelMatrix } = args;
+  const { mode, polygonOverlays, lineOverlays, pointOverlays, modelMatrix, odColorScale } = args;
   const ns = args.namespace ? `overlay-${args.namespace}` : "overlay";
   const layers = [];
 
@@ -60,21 +63,34 @@ export function createOverlayLayers(args: {
   });
 
   if (mode === "heatmap" && sortedPolygonOverlays.length > 0) {
-    // Square grid heatmap: each bin is a filled square colored by dominant class.
-    // Alpha uses a power curve (^0.55) applied after log-normalization so the full
-    // 0–210 alpha range is used even when most counts cluster at the high end.
+    // OD density map: each bin is colored by its weighted-average OD value when available.
+    // Density drives alpha — low-density bins at tissue edges fade toward transparent,
+    // preventing color bleed outside the tissue boundary.
+    // Falls back to class-color density when the overlay has no OD data.
     layers.push(
       new PolygonLayer({
         id: `${ns}-heatmap-grid`,
         data: sortedPolygonOverlays,
         getPolygon: (item: (typeof sortedPolygonOverlays)[number]) => item.polygon[0] ?? [],
         getFillColor: (item: (typeof sortedPolygonOverlays)[number]) => {
-          const base = overlayColor(item, [56, 189, 248, 255]);
           const d = typeof item.properties.density === "number" ? item.properties.density : 0.5;
-          // Power curve stretches low-density bins toward transparent and keeps peak bins opaque.
-          // classOpacity (from base[3]) is the style-panel opacity; at 100% it allows full 255 alpha.
+          const densityFactor = Math.pow(d, 0.55);
+          const od = typeof item.properties.od === "number" ? item.properties.od : null;
+          // classOpacity from style panel controls overall transparency ceiling
+          const base = overlayColor(item, [56, 189, 248, 255]);
           const classOpacity = (base[3] ?? 255) / 255;
-          const alpha = Math.round(Math.pow(d, 0.55) * 255 * classOpacity);
+
+          if (od !== null && odColorScale) {
+            // OD path: RGB from palette, alpha = palette's own alpha × density × style opacity.
+            // The palette alpha already encodes staining strength (64 at background → 242 at peak),
+            // so the final alpha reflects both "how strongly stained" and "how many cells are here".
+            const [r, g, b, paletteA] = odColorForValue(od, odColorScale);
+            const alpha = Math.round((paletteA / 255) * densityFactor * 255 * classOpacity);
+            return [r, g, b, alpha];
+          }
+
+          // Fallback: class-color density map (no OD data in this overlay)
+          const alpha = Math.round(densityFactor * 255 * classOpacity);
           return [base[0], base[1], base[2], alpha];
         },
         stroked: false,

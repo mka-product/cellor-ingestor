@@ -273,11 +273,11 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
     for (const [overlayId, runtime] of Object.entries(overlayRuntimesByKey)) {
       if (odInitializedRef.current.has(overlayId)) continue;
       if (runtime.features.length === 0) continue;
-      // Use "any polygon has OD" rather than the 50%-majority check — at heatmap zoom only a
-      // sparse sample of chunks is loaded, so the majority threshold may never fire even when
-      // the overlay has per-cell OD data throughout.
+      // Check all geometry kinds: cluster features are points, raw/simplified are polygons.
+      // At heatmap zoom only a sparse sample of chunks is loaded so the majority threshold
+      // may never fire — any OD hit is enough to initialize the scale.
       const hasAnyOd = runtime.features.some(
-        (f) => f.kind === "polygon" && extractOdValue(f) !== null,
+        (f) => extractOdValue(f) !== null,
       );
       if (!hasAnyOd) continue;
       odInitializedRef.current.add(overlayId);
@@ -336,7 +336,7 @@ export function ViewerWorkspace({ manifest, initialViewport, initialAnnotationId
             }
           }];
         });
-        return [{ id, features: styledFeatures, runtimeMode: runtime.runtimeMode }];
+        return [{ id, features: styledFeatures, runtimeMode: runtime.runtimeMode, odColorScale: odScale ?? null }];
       });
   }, [workspace.activeOverlayIds, workspace.overlayVisibility, overlayRuntimesByKey, overlayStylesMap, overlayOdScales, overlaySources]);
 

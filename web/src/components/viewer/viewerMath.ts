@@ -63,8 +63,19 @@ export function visibleSlideWindow(
   viewerSize: ViewerSize,
   scale: number
 ) {
-  const halfWidth = viewerSize.width / (2 * scale);
-  const halfHeight = viewerSize.height / (2 * scale);
+  const hw = viewerSize.width / (2 * scale);
+  const hh = viewerSize.height / (2 * scale);
+
+  // When the viewport is rotated, the visible slide area is a rotated rectangle.
+  // Expand the AABB to its rotated envelope so overlay chunks and tile fetches
+  // cover the full rotated viewport — without this, features at the rotated corners
+  // are outside the unrotated window and never loaded.
+  const theta = (viewState.rotationOrbit * Math.PI) / 180;
+  const cosT = Math.abs(Math.cos(theta));
+  const sinT = Math.abs(Math.sin(theta));
+  const halfWidth  = hw * cosT + hh * sinT;
+  const halfHeight = hw * sinT + hh * cosT;
+
   const left = Math.max(0, viewState.target[0] - halfWidth);
   const right = Math.min(manifest.width, viewState.target[0] + halfWidth);
   const worldTop = Math.max(0, viewState.target[1] - halfHeight);

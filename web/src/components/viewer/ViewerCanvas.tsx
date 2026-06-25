@@ -15,7 +15,7 @@ import { selectLevel } from "../../viewer/lod";
 import { buildOverlayRenderPlan, computeOverlayLodThresholds, type OverlayRenderMode } from "../../viewer/overlayLod";
 import type { OverlayWindow } from "../../viewer/overlayManifest";
 import { createOverlayLayers } from "../../viewer/overlayLayers";
-import { extractOdEntry, sanitizeOverlayLabel } from "../../viewer/overlayStyling";
+import { extractOdEntry, sanitizeOverlayLabel, type OdColorScale } from "../../viewer/overlayStyling";
 import { TileCache } from "../../viewer/tileCache";
 import { createBitmapLayers } from "../../viewer/tileBitmapLayers";
 import { createAnnotationEditorLayer } from "./AnnotationEditorLayer";
@@ -46,6 +46,8 @@ export type OverlayGroup = {
   features: OverlayFeature[];
   /** Precomputed representation mode from the chunk runtime — skips frontend LOD computation. */
   runtimeMode: OverlayRenderMode | null;
+  /** OD color scale — when present, heatmap bins are colored by OD value rather than class color. */
+  odColorScale?: OdColorScale | null;
 };
 
 type Props = {
@@ -493,6 +495,7 @@ export function ViewerCanvas(props: Props) {
     () =>
       props.overlayGroups.map((group) => ({
         id: group.id,
+        odColorScale: group.odColorScale ?? null,
         plan: buildOverlayRenderPlan(group.features, scale, {
           // Heatmap storage loads cluster-centroid points — force binning into grid squares
           // regardless of zoom, because centroid points must never fall through to raw/point rendering.
@@ -508,7 +511,7 @@ export function ViewerCanvas(props: Props) {
 
   const overlayLayers = useMemo(
     () =>
-      overlayRenderData.flatMap(({ id, plan }) =>
+      overlayRenderData.flatMap(({ id, plan, odColorScale }) =>
         createOverlayLayers({
           mode: plan.mode,
           polygonOverlays: plan.features
@@ -521,7 +524,8 @@ export function ViewerCanvas(props: Props) {
             .filter((f) => f.kind === "point")
             .map((f) => ({ ...f, position: imageCoordinatesToWorld(manifest, f.geometry["coordinates"]) as number[] })),
           modelMatrix: layerModelMatrix,
-          namespace: id
+          namespace: id,
+          odColorScale
         })
       ),
     [overlayRenderData, layerModelMatrix, manifest]
