@@ -1,24 +1,81 @@
-# Cellor Ingestor
+# Cellor
 
-Greenfield MVP for server-side WSI ingestion and deck.gl streaming.
+WSI ingestion, streaming, and annotation platform — monorepo.
 
-## Monorepo Layout
+## What it does
 
-- `api/` FastAPI service for upload orchestration, catalog queries, and manifest resolution.
-- `worker/` Python ingestion worker for derived artifacts, tile groups, indexes, and manifests.
-- `web/` React + TypeScript viewer using deck.gl tile rendering primitives.
-- `docs/` ADRs, glossary, context map, and contracts.
-- `scripts/` Local bootstrap and quality helpers.
+- Ingests whole-slide images (SVS, NDPI, TIFF, …) into tile pyramids stored on S3-compatible object storage
+- Streams tiles and overlay heatmaps to a deck.gl viewer over a FastAPI backend
+- Runs as a **standalone desktop app** (no Docker, no browser needed) or as a **cloud-hosted service** on Fly.io / Docker Compose
+- Supports overlay ingestion (cluster maps, OD density, polygon annotations) with two-step delete confirmation
+- Background ingestion daemon decoupled from the API for scalable processing
 
-## Local Workflow
+## Monorepo layout
 
-1. Run `scripts/bootstrap.sh` to install local dependencies.
-2. Run `pytest api/tests worker/tests` for backend verification.
-3. Run `npm test -- --runInBand` inside `web/` for frontend verification.
+```
+api/        FastAPI service — upload orchestration, catalog, manifest, auth
+worker/     Ingestion worker — tile pyramids, overlays, cluster summaries
+web/        React + TypeScript viewer — deck.gl tiles, overlays, annotations
+desktop/    Native desktop launcher (pywebview + bundled MinIO)
+docs/       ADRs, glossary, context map, data contracts
+scripts/    Local bootstrap and quality helpers
+```
 
-This repository follows DDD layering:
+## Quick start
 
-- `domain`: entities, value objects, and invariants only.
-- `application`: use cases and orchestration.
-- `infrastructure`: storage, queue, imaging, and config adapters.
-- `interfaces`: HTTP and worker entrypoints.
+See **[DEPLOY.md](DEPLOY.md)** for full instructions. Short version:
+
+### Desktop (macOS / Windows / Linux)
+
+```bash
+python3.12 -m venv .venv-desktop && source .venv-desktop/bin/activate
+pip install -r api/requirements.txt && pip install pywebview
+(cd web && npm ci --legacy-peer-deps && npm run build)
+python desktop/scripts/fetch-minio.py
+python desktop/launcher.py
+```
+
+Opens a native window. No browser, no Docker. User data stored in `~/Library/Application Support/Cellor/`.
+
+### Docker Compose (self-hosted)
+
+```bash
+cp .env.example .env   # fill in storage credentials
+docker compose up --build -d
+# API at http://localhost:8000
+```
+
+### Fly.io (cloud)
+
+```bash
+(cd web && npm run build)
+fly deploy --config fly.toml        # API + SPA
+fly deploy --config fly.worker.toml # ingestion worker
+```
+
+## Development
+
+```bash
+# Backend tests
+pytest api/tests worker/tests
+
+# Frontend tests
+cd web && npm test -- --runInBand
+
+# Local dev server (hot reload)
+cd web && npm run dev
+# API: uvicorn api.api_service.main:app --reload
+```
+
+## Architecture
+
+Follows DDD layering throughout `api/` and `worker/`:
+
+| Layer | Responsibility |
+|---|---|
+| `domain/` | Entities, value objects, invariants |
+| `application/` | Use cases, orchestration |
+| `infrastructure/` | Storage, queue, imaging, config adapters |
+| `interfaces/` | HTTP routes, worker entrypoints |
+
+Storage is S3-compatible (Backblaze B2, AWS S3, MinIO). Auth is JWT-based — Supabase JWKS in cloud mode, locally-issued tokens in desktop mode.
